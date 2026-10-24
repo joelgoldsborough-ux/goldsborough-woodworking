@@ -188,10 +188,20 @@
     /* Scroll-driven build */
     .build {
       position: relative;
-      height: 640vh;
+      height: 760vh;
       background: var(--green-deep);
       color: #ece8de;
+      overflow-x: clip; /* the vignette spans the full window width; clip keeps it from causing sideways scroll */
     }
+    /* A gentle vignette over the whole stage so the edges fall off into shadow, like a workshop lit from above */
+    .build-stage::before {
+      content: "";
+      position: absolute;
+      inset: 0 calc(50% - 50vw);
+      background: radial-gradient(ellipse 75% 70% at 62% 55%, rgba(0, 0, 0, 0) 45%, rgba(4, 10, 7, 0.45) 100%);
+      pointer-events: none;
+    }
+    .build-stage > * { position: relative; }
     .build-stage {
       position: sticky;
       top: 0;
@@ -212,21 +222,24 @@
       background: var(--gold);
     }
     .steps { list-style: none; margin: 0; padding: 0; }
+    /* Exactly one step is lit at a time. The change is quick, so a fast scroll never shows two steps lit at once. */
     .steps li {
       padding-block: 7px;
       opacity: 0.38;
-      transition: opacity 0.35s;
+      transition: opacity 0.12s linear;
     }
     /* Every step title stays visible and clickable; only the current step opens its description */
     .steps li p {
       max-height: 0;
       overflow: hidden;
       opacity: 0;
-      transition: max-height 0.45s ease, opacity 0.3s ease;
+      transition: max-height 0.25s ease, opacity 0.12s linear;
     }
     .steps li.on p { max-height: 9em; opacity: 1; }
     .steps li.on { opacity: 1; }
-    .steps li:not(.on):hover { opacity: 0.7; }
+    /* Hovering an unlit step only brightens its number, so it can't be mistaken for the current step */
+    .steps li:not(.on) .step-link:hover span,
+    .steps li:not(.on) .step-link:focus-visible span { color: #f0d9a6; }
     .steps h3 { font-size: 21px; }
     .step-link {
       appearance: none; background: none; border: 0; padding: 0; margin: 0;
@@ -257,6 +270,24 @@
     .build-art canvas { opacity: 0; }
     .build-art.ready::before { opacity: 0; }
     .build-art.ready canvas { opacity: 1; }
+    /* Loading note over the still while the 3D model downloads; hidden once it's ready, or when the still is all there is */
+    .build-loading {
+      position: absolute; left: 50%; bottom: 6%;
+      transform: translateX(-50%);
+      font-family: var(--sans); font-size: 12px; letter-spacing: 0.04em;
+      color: rgba(236, 232, 222, 0.75);
+      background: rgba(20, 28, 23, 0.6);
+      padding: 6px 12px; border-radius: 999px;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+    .build-loading::before {
+      content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%;
+      background: var(--gold); vertical-align: 1px;
+      animation: build-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes build-pulse { 50% { opacity: 0.25; } }
+    .build-art.ready .build-loading, .build-art.static .build-loading { opacity: 0; }
 
     /* Live-edge feature */
     .live-edge { padding-block: 130px 120px; }
@@ -397,7 +428,7 @@
         align-content: center;
         gap: 18px;
       }
-      .build { height: 560vh; }
+      .build { height: 660vh; }
       .build-art { order: -1; aspect-ratio: 4 / 3; max-height: 40vh; }
       .build-copy h2 { font-size: 24px; margin-bottom: 10px; }
       .steps li { padding-block: 3px; }
@@ -555,7 +586,9 @@
           </ol>
         </div>
       </div>
-      <div class="build-art" role="img" aria-label="A walnut live-edge river table top with a blue epoxy river and a butterfly key across a crack"></div>
+      <div class="build-art" role="img" aria-label="A finished walnut live-edge river table with a blue epoxy river, a butterfly key across a crack, and black steel legs">
+        <span class="build-loading" aria-hidden="true">Loading the 3D model</span>
+      </div>
     </div>
   </section>
 
@@ -744,6 +777,7 @@
     import * as THREE from 'three';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
     import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
     const section = document.querySelector('.build');
     const art = section.querySelector('.build-art');
@@ -760,37 +794,41 @@
     const smoother = t => t * t * t * (t * (t * 6 - 15) + 10);
 
     // ---------- Timeline, as fractions of the section's scroll ----------
+    // Steps 4 to 9 play in the first 72% of the build; step 10, the payoff, gets the last 28%
     const STAGE = {
-      slabs: [0, 0.07],
-      bark: [0.06, 0.12],     // bark peels off the live edges
-      flatten: [0.14, 0.24],  // router sled passes over the slabs
-      mold: [0.26, 0.32],     // melamine walls go up
-      pour: [0.34, 0.47],
-      torch: [0.49, 0.57],    // flame pops the bubbles
-      demold: [0.58, 0.63],   // cured; the mold comes off
-      crack: [0.65, 0.68],
-      scribe: [0.68, 0.71],
-      mortise: [0.71, 0.74],
-      key: [0.74, 0.81],
-      flush: [0.82, 0.86],    // the proud key is planed flush
-      sand: [0.84, 0.91],     // random-orbit sander works over the top
-      rake: [0.84, 0.95],     // light drops to a low raking angle
-      wipe: [0.91, 0.99]      // oil goes on along the grain
+      slabs: [0, 0.061],
+      bark: [0.052, 0.104],    // bark peels off the live edges
+      flatten: [0.121, 0.208], // router sled passes over the slabs
+      mold: [0.226, 0.278],    // melamine walls go up
+      pour: [0.295, 0.408],
+      torch: [0.425, 0.494],   // flame pops the bubbles
+      demold: [0.503, 0.547],  // cured; the mold comes off
+      crack: [0.564, 0.59],
+      scribe: [0.59, 0.616],
+      mortise: [0.616, 0.642],
+      key: [0.642, 0.703],
+      flush: [0.703, 0.73],    // the proud key is planed flush
+      // Step 10
+      sand: [0.725, 0.79],     // random-orbit sander works over the top
+      rake: [0.73, 0.86],      // light drops to a low raking angle
+      wipe: [0.79, 0.87],      // oil goes on along the grain, a sheen sweeping just behind it
+      legs: [0.875, 0.94],     // steel legs rise and lift the top to table height
+      turn: [0.9, 1]           // a slow turn around the finished table
     };
     // The first P0 of the scroll is the prologue (tree to dried slabs); the build timeline above plays in the rest
     const P0 = 0.32;
     const toBuild = v => P0 + (1 - P0) * v;
     const PRO = {
       fell: [0.05, 0.3],
-      buck: [0.32, 0.42],    // the crown is cut away
+      buck: [0.3, 0.45],     // the crown is cut away
       mill: [0.45, 0.68],    // sawmill blade travels the log
       stack: [0.7, 0.8],     // slabs settle into a stickered stack
       dry: [0.8, 0.9],
       choose: [0.9, 1]       // the matched pair lifts out
     };
     // Where each numbered step begins, and where a step link scrolls to (that step, completed)
-    const STEP_START = [0, 0.43 * P0, 0.72 * P0, ...[0, 0.13, 0.25, 0.33, 0.48, 0.64, 0.83].map(toBuild)];
-    const STEP_LAND = [0.42 * P0, 0.7 * P0, 0.9 * P0, ...[0.12, 0.245, 0.325, 0.475, 0.635, 0.815, 1].map(toBuild)];
+    const STEP_START = [0, 0.43 * P0, 0.72 * P0, ...[0, 0.113, 0.217, 0.286, 0.416, 0.555, 0.72].map(toBuild)];
+    const STEP_LAND = [0.42 * P0, 0.7 * P0, 0.9 * P0, ...[0.104, 0.213, 0.282, 0.412, 0.551, 0.707, 1].map(toBuild)];
 
     // ---------- Table layout (metres; x along the table, z across it) ----------
     const L = 3.2, W = 1.5, T = 0.09, HALF = L / 2;
@@ -1088,13 +1126,17 @@
     // ---------- The oil finish ----------
     // One shared uniform: the x position of the oiling cloth. Behind it the surface is finished, at it the oil is wet,
     // ahead of it the wood is still dry from sanding.
-    const FINISH = { uWipeX: { value: -10 } };
+    // uPourX is the leading edge of the epoxy as it flows down the river (only the resin uses it)
+    const FINISH = { uWipeX: { value: -10 }, uPourX: { value: 10 } };
     function addFinish(material, o) {
       material.onBeforeCompile = shader => {
         shader.uniforms.uWipeX = FINISH.uWipeX;
+        shader.uniforms.uPourX = FINISH.uPourX;
         shader.uniforms.uDry = { value: o.dry };
         shader.uniforms.uRough = { value: new THREE.Vector3(o.roughDry, o.roughWet, o.roughDone) };
         shader.uniforms.uCoat = { value: o.coat };
+        // How much the oil deepens the colour (wood darkens and warms; the resin doesn't)
+        shader.uniforms.uDeep = { value: o.deep || 0 };
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', '#include <common>\nvarying vec3 vFinishPos;')
           .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinishPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
@@ -1102,26 +1144,45 @@
           .replace('#include <common>', `#include <common>
             varying vec3 vFinishPos;
             uniform float uWipeX;
+            uniform float uPourX;
             uniform float uDry;
             uniform float uCoat;
             uniform vec3 uRough;
-            float gFin = 0.0;
-            float gWet = 0.0;`)
+            uniform float uDeep;
+            float gFin = 0.0;    // 1 where the oil has gone on
+            float gWet = 0.0;    // the wet band right under the cloth
+            float gSheen = 0.0;  // the bright sheen trailing just behind it`)
           // Raised grain: the bump relief flattens as the finish fills it
           .replace('#include <bumpmap_pars_fragment>', THREE.ShaderChunk.bumpmap_pars_fragment
             .replace('return vec2( dBx, dBy );', 'return vec2( dBx, dBy ) * ( 1.0 - 0.8 * gFin );'))
           .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+            #ifdef POUR_FRONT
+            {
+              // Flowing epoxy: the leading edge runs ahead down the middle of the river and lags at the sides,
+              // with small ripples that travel along it, so it reads as liquid rather than a sliding cut
+              float z = vFinishPos.z;
+              float front = uPourX - 0.16 * clamp( z * z / 0.05, 0.0, 1.0 )
+                + 0.025 * sin( z * 22.0 + uPourX * 9.0 ) + 0.015 * sin( z * 47.0 - uPourX * 14.0 );
+              if ( vFinishPos.x > front ) discard;
+            }
+            #endif
             {
               float behind = uWipeX - vFinishPos.x;
               gFin = smoothstep( 0.0, 0.22, behind );
               gWet = exp( -pow( ( behind - 0.05 ) / 0.07, 2.0 ) );
+              gSheen = exp( -pow( ( behind - 0.2 ) / 0.13, 2.0 ) );
             }`)
           .replace('#include <map_fragment>', `#include <map_fragment>
             {
               float l = dot( diffuseColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
               vec3 dry = mix( diffuseColor.rgb, vec3( l ), 0.25 ) * ( 1.0 + uDry ) + uDry * 0.03;
-              diffuseColor.rgb = mix( dry, diffuseColor.rgb, gFin ) * ( 1.0 - 0.14 * gWet );
+              // Oiled wood: darker and more saturated, so the grain pops
+              vec3 oiled = mix( diffuseColor.rgb, pow( diffuseColor.rgb, vec3( 1.25 ) ) * 0.86, uDeep );
+              diffuseColor.rgb = mix( dry, oiled, gFin ) * ( 1.0 - 0.14 * gWet );
             }`)
+          .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+            // A warm sheen sweeps across the top as the fresh oil catches the light, strongest on the lighter grain
+            totalEmissiveRadiance += vec3( 1.0, 0.86, 0.66 ) * gSheen * uDeep * ( 0.05 + 0.5 * diffuseColor.g );`)
           .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
             roughnessFactor *= mix( uRough.x, uRough.z, gFin );
             roughnessFactor = mix( roughnessFactor, uRough.y, gWet );`)
@@ -1133,6 +1194,7 @@
               material.sheenColor *= 1.0 - gFin;
             #endif`);
       };
+      if (o.pour) material.defines = Object.assign(material.defines || {}, { POUR_FRONT: '' });
       material.customProgramCacheKey = () => 'finish-' + o.name;
     }
 
@@ -1147,7 +1209,9 @@
       _f.copy(_dir).negate();
       _r.crossVectors(_f, UP).normalize();
       _u.crossVectors(_r, _f);
-      const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect, k = 1 - margin;
+      // Narrow or tall frames (phones, slim windows) get extra breathing room so nothing lands in the edge fade
+      const safe = margin + (camera.aspect < 1.35 ? 0.04 : 0);
+      const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect, k = 1 - safe;
       const corners = [];
       let dist = 0, nearest = 0;
       for (let n = 0; n < 8; n++) {
@@ -1186,8 +1250,10 @@
       camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     }
     const tableBox = spread => ({ min: [-HALF, -T, -W / 2 - spread], max: [HALF, 0, W / 2 + spread] });
-    // The key's end of the table, edge to edge across its width, so the close-up only ever crops on one side
-    const KEY_BOX = { min: [0.35, -T, -W / 2], max: [HALF + 0.02, 0.02, W / 2 + 0.02] };
+    // Step 9 close-up: a tight box centred on the butterfly key, so the crop reads as a deliberate detail shot
+    const KEY_BOX = { min: [KEY_X - 0.36, -T, CRACK_Z - 0.3], max: [KEY_X + 0.28, 0.04, CRACK_Z + 0.27] };
+    // The finished table standing on its legs, with the top lifted to dining height
+    const LIFT = 0.66;
     // Camera keyframes. Bearing 0 looks from +z, bearing pi/2 from +x; the key sits at the +x, +z corner.
     // Boxes that include the tools working above the table
     const BOXES = {
@@ -1195,14 +1261,15 @@
       table: tableBox(0),
       sled: { min: [-HALF - 0.2, -T, -W / 2 - 0.15], max: [HALF + 0.2, 0.32, W / 2 + 0.15] },
       mold: { min: [-HALF - 0.03, -T, -W / 2 - 0.03], max: [HALF + 0.03, 0.03, W / 2 + 0.03] },
-      torch: { min: [-HALF, -T, -W / 2], max: [HALF, 0.16, W / 2] }
+      torch: { min: [-HALF, -T, -W / 2], max: [HALF, 0.16, W / 2] },
+      finished: { min: [-HALF, -T, -W / 2], max: [HALF, LIFT, W / 2] }
     };
     // Prologue framing: the standing tree, the felled trunk, the log, the sawmill, the drying stack
     const R = 0.38, LOG = 3.4, AXIS_Y = -T + R;
     Object.assign(BOXES, {
-      tree: { min: [-LOG / 2 - 1.7, -T, -1.7], max: [-LOG / 2 + 1.7, 7.7, 1.7] },
-      falling: { min: [-LOG / 2 - 1.7, -T, -1.9], max: [-LOG / 2 + 7.0, 7.4, 1.9] },
-      fallen: { min: [-LOG / 2 - 0.3, -T, -1.9], max: [-LOG / 2 + 8.0, 2.2, 1.9] },
+      tree: { min: [-LOG / 2 - 3, -T, -3], max: [-LOG / 2 + 3, 8.6, 3] },
+      falling: { min: [-LOG / 2 - 3, -T, -3], max: [-LOG / 2 + 7.6, 8.0, 3] },
+      fallen: { min: [-LOG / 2 - 0.3, -T, -3], max: [-LOG / 2 + 8.2, 2.6, 3] },
       log: { min: [-LOG / 2 - 0.1, -T, -0.5], max: [LOG / 2 + 0.1, AXIS_Y + R, 0.5] },
       mill: { min: [-LOG / 2 - 0.4, -T, -0.85], max: [LOG / 2 + 0.4, 1.15, 0.85] },
       stack: { min: [-LOG / 2, -T, -0.5], max: [LOG / 2, 0.45, 0.5] }
@@ -1220,17 +1287,21 @@
     ].map(s => ({ ...s, p: s.p * P0 }));
     const BUILD_SHOTS = [
       { p: 0, az: -0.5, el: 0.8, box: 'spread', margin: 0.08, fov: 30 },
-      { p: 0.12, az: -0.42, el: 0.76, box: 'table', margin: 0.06, fov: 30 },
-      { p: 0.24, az: -0.3, el: 0.62, box: 'sled', margin: 0.05, fov: 30 },
-      { p: 0.32, az: -0.2, el: 0.6, box: 'mold', margin: 0.06, fov: 30 },
-      { p: 0.47, az: -0.1, el: 0.72, box: 'mold', margin: 0.06, fov: 30 },
-      { p: 0.57, az: 0.02, el: 0.74, box: 'torch', margin: 0.06, fov: 30 },
-      { p: 0.64, az: 0.25, el: 0.86, box: 'table', margin: 0.06, fov: 30 },
-      { p: 0.67, az: 0.55, el: 1.0, box: 'key', margin: 0.06, fov: 30 },
-      { p: 0.82, az: 0.65, el: 0.96, box: 'key', margin: 0.06, fov: 30 },
-      { p: 0.92, az: 1.4, el: 0.42, box: 'table', margin: 0.04, fov: 40 },
-      // Product shot: low three-quarter from the key's corner, looking down the length, settling in while the oil goes on
-      { p: 1, az: 1.3, el: 0.34, box: 'table', margin: 0.03, fov: 44 }
+      { p: 0.104, az: -0.42, el: 0.76, box: 'table', margin: 0.07, fov: 30 },
+      { p: 0.208, az: -0.3, el: 0.62, box: 'sled', margin: 0.06, fov: 30 },
+      { p: 0.278, az: -0.2, el: 0.6, box: 'mold', margin: 0.07, fov: 30 },
+      { p: 0.408, az: -0.1, el: 0.72, box: 'mold', margin: 0.07, fov: 30 },
+      { p: 0.494, az: 0.02, el: 0.74, box: 'torch', margin: 0.07, fov: 30 },
+      { p: 0.547, az: 0.25, el: 0.86, box: 'table', margin: 0.08, fov: 30 },
+      // Step 9: a clear, intentional close-up on the key
+      { p: 0.575, az: 0.55, el: 1.02, box: 'key', margin: 0.1, fov: 30 },
+      { p: 0.705, az: 0.68, el: 0.98, box: 'key', margin: 0.1, fov: 30 },
+      // Step 10: pull back to the whole table with generous margins, then the finished table on its legs
+      { p: 0.76, az: 0.95, el: 0.55, box: 'table', margin: 0.12, fov: 32 },
+      { p: 0.87, az: 1.15, el: 0.42, box: 'table', margin: 0.12, fov: 32 },
+      { p: 0.92, az: 1.2, el: 0.3, box: 'finished', margin: 0.12, fov: 32 },
+      // The slow turn: the camera circles about half a right angle while the table settles
+      { p: 1, az: 2.0, el: 0.34, box: 'finished', margin: 0.12, fov: 32 }
     ];
     const SHOTS = [...PRO_SHOTS, ...BUILD_SHOTS.map(s => ({ ...s, p: toBuild(s.p) }))];
     function shotAt(p, spread) {
@@ -1272,8 +1343,10 @@
       try {
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       } catch (e) {
-        return; // no WebGL: the still of the finished table stays in place
+        art.classList.add('static'); // no WebGL: the still of the finished table stays in place
+        return;
       }
+      // Sharpness cap: never more than 2 pixels per CSS pixel, and 1.5 on phones to keep them smooth
       renderer.setPixelRatio(Math.min(devicePixelRatio, phone ? 1.5 : 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.shadowMap.enabled = true;
@@ -1307,7 +1380,7 @@
       const baseSun = sun.intensity;
       sun.castShadow = true;
       sun.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048);
-      Object.assign(sun.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, near: 0.5, far: 14 });
+      Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 18 });
       sun.shadow.bias = -0.0003;
       sun.shadow.normalBias = 0.01;
       scene.add(sun, new THREE.HemisphereLight(0xdfe9ff, 0x2a1d12, 0.15));
@@ -1338,16 +1411,16 @@
         anisotropy: 0.35
       }, extra));
       const woodMat = woodLike(woodMap, woodSurface);
-      addFinish(woodMat, { name: 'wood', dry: 0.12, roughDry: 1, roughWet: 0.14, roughDone: 0.62, coat: 0.32 });
+      addFinish(woodMat, { name: 'wood', dry: 0.12, roughDry: 1, roughWet: 0.14, roughDone: 0.55, coat: 0.4, deep: 1 });
       const keyMat = woodLike(keyMap, keySurface, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-      addFinish(keyMat, { name: 'key', dry: 0.14, roughDry: 1, roughWet: 0.14, roughDone: 0.62, coat: 0.32 });
+      addFinish(keyMat, { name: 'key', dry: 0.14, roughDry: 1, roughWet: 0.14, roughDone: 0.55, coat: 0.4, deep: 1 });
 
       const pourFront = new THREE.Plane(new THREE.Vector3(-1, 0, 0), -HALF);
       const resinMat = new THREE.MeshPhysicalMaterial({
-        map: resinMap, roughness: 1, clearcoat: 1, clearcoatRoughness: 0.06,
+        map: resinMap, roughness: 1, clearcoat: 1, clearcoatRoughness: 0.14,
         clippingPlanes: [pourFront], clipShadows: true
       });
-      addFinish(resinMat, { name: 'resin', dry: 0.08, roughDry: 0.35, roughWet: 0.08, roughDone: 0.1, coat: 0.7 });
+      addFinish(resinMat, { name: 'resin', dry: 0.08, roughDry: 0.35, roughWet: 0.08, roughDone: 0.1, coat: 0.7, pour: true });
       const resinSideMat = new THREE.MeshPhysicalMaterial({ color: 0x0b5a86, roughness: 0.15, clippingPlanes: [pourFront], clipShadows: true });
       const keySideMat = new THREE.MeshStandardMaterial({ color: 0x2c1a10, roughness: 0.8 });
 
@@ -1373,13 +1446,74 @@
       const slabR = new THREE.Mesh(extrude(rightShape, T), [woodMat, sideMat]);
       const resin = new THREE.Mesh(extrude(riverShape, T), [resinMat, resinSideMat]);
       for (const m of [slabL, slabR, resin]) { m.castShadow = true; m.receiveShadow = true; }
-      scene.add(slabL, slabR, resin);
+      // The whole top lives in one group so it can be lifted onto its legs at the end
+      const tableTop = new THREE.Group();
+      tableTop.add(slabL, slabR, resin);
+      scene.add(tableTop);
 
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.55 }));
+      // Legs: two black powder-coated steel U-frames that rise from the floor in step 10
+      const steel = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, metalness: 0.6, roughness: 0.42 });
+      const LEG = 0.06, legInset = W / 2 - 0.14; // tube size and how far in from the edge the legs sit
+      const legs = new THREE.Group();
+      for (const x of [-HALF + 0.32, HALF - 0.32]) {
+        const frame = new THREE.Group();
+        // Built from the floor up (0 to LIFT) so scaling it vertically makes it grow out of the floor
+        for (const z of [-legInset, legInset]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(LEG, LIFT, LEG), steel);
+          post.position.set(0, LIFT / 2, z);
+          frame.add(post);
+        }
+        for (const y of [LEG / 2, LIFT - LEG / 2]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(LEG, LEG, legInset * 2 + LEG), steel);
+          rail.position.y = y;
+          frame.add(rail);
+        }
+        frame.position.x = x;
+        legs.add(frame);
+      }
+      legs.position.y = -T;
+      legs.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(legs);
+
+      // Invisible floor that only shows the sun's shadows (lighter now; the contact shadow below does the anchoring)
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -T - 0.002;
       ground.receiveShadow = true;
       scene.add(ground);
+
+      // ----- Grounding: a soft contact shadow under each stage's object and a faint pool of floor light -----
+      // Both are flat squares on the floor with a soft radial fade painted into a small canvas texture
+      const radialTexture = stops => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const ctx = c.getContext('2d'), g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        for (const [at, color] of stops) g.addColorStop(at, color);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      };
+      const floorDecal = (texture, y) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+          map: texture, transparent: true, depthWrite: false, toneMapped: false
+        }));
+        m.rotation.x = -Math.PI / 2;
+        m.position.y = y;
+        m.renderOrder = -1; // draw before everything else so it always sits under the objects
+        scene.add(m);
+        return m;
+      };
+      const floorGlow = floorDecal(radialTexture([[0, 'rgba(120,150,128,0.13)'], [0.5, 'rgba(120,150,128,0.05)'], [0.85, 'rgba(120,150,128,0)'], [1, 'rgba(120,150,128,0)']]), -T - 0.004);
+      const contact = floorDecal(radialTexture([[0, 'rgba(4,8,6,0.78)'], [0.45, 'rgba(4,8,6,0.5)'], [1, 'rgba(4,8,6,0)']]), -T - 0.003);
+      // Place the contact shadow: centre (x, z), size (sx by sz) and strength
+      const setContact = (x, z, sx, sz, strength) => {
+        contact.position.x = x;
+        contact.position.z = z;
+        contact.scale.set(Math.max(sx, 0.01), Math.max(sz, 0.01), 1);
+        contact.material.opacity = strength;
+      };
 
       // The check: a ragged split running in from the end of the right slab
       const crackPts = [], crackBack = [];
@@ -1477,6 +1611,48 @@
       mold.position.y = -T;
       scene.add(mold);
 
+      // Mold details: blue painter's tape over each corner seam, and screw heads holding the walls together
+      const tapeMat = new THREE.MeshStandardMaterial({ color: 0x3f7fc4, roughness: 0.8, transparent: true });
+      const screwMat = new THREE.MeshStandardMaterial({ color: 0x9a9c9e, metalness: 0.9, roughness: 0.35, transparent: true });
+      const [wallN, wallS, wallE, wallW] = walls;
+      for (const end of [wallE, wallW]) {
+        const sx = end.userData.out[0]; // +1 for the east end wall, -1 for the west
+        for (const sz of [-1, 1]) {
+          // A strip of tape folded around the outside corner: one piece on the end wall, one wrapping onto the long wall
+          const onEnd = new THREE.Mesh(new THREE.BoxGeometry(0.003, MH + 0.004, 0.07), tapeMat);
+          onEnd.position.set(sx * (MT / 2 + 0.0015), MH / 2, sz * (W / 2 - 0.025));
+          const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.05, MH + 0.004, 0.003), tapeMat);
+          wrap.position.set(-sx * 0.012, MH / 2, sz * (W / 2 + MT + 0.0015));
+          end.add(onEnd, wrap);
+          // Two screws through the end wall into each long wall
+          for (const y of [MH * 0.3, MH * 0.72]) {
+            const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.003, 12), screwMat);
+            screw.rotation.z = Math.PI / 2;
+            screw.position.set(sx * (MT / 2 + 0.0015), y, sz * (W / 2 + MT / 2));
+            end.add(screw);
+          }
+        }
+      }
+      // A row of screws along each long wall, where it is fixed down to the base board
+      for (const side of [wallN, wallS]) {
+        const sz = side.userData.out[1];
+        for (let x = -HALF + 0.2; x <= HALF - 0.2; x += 0.45) {
+          const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.003, 12), screwMat);
+          screw.rotation.x = Math.PI / 2;
+          screw.position.set(x, MH * 0.32, sz * (MT / 2 + 0.0015));
+          side.add(screw);
+        }
+      }
+
+      // The stream of epoxy pouring in from a bucket above the far end (built from its bottom up, 0.7 m tall)
+      const streamGeo = new THREE.CylinderGeometry(0.009, 0.014, 0.7, 12, 1, true);
+      streamGeo.translate(0, 0.35, 0);
+      const pourStream = new THREE.Mesh(streamGeo, new THREE.MeshPhysicalMaterial({
+        color: 0x1d8fc4, roughness: 0.08, clearcoat: 1, transparent: true, opacity: 0.9
+      }));
+      pourStream.visible = false;
+      scene.add(pourStream);
+
       // Bubbles: trapped air that rises as the epoxy goes in
       let seed = 7;
       const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -1502,9 +1678,17 @@
       const core = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.07, 16, 1, true), flameMat(0xbfe0ff));
       core.rotation.x = Math.PI;
       core.position.y = 0.09;
-      const glow = new THREE.PointLight(0xffa654, 0.8, 0.7, 2);
+      // Warm light the flame throws onto the epoxy just below it
+      const glow = new THREE.PointLight(0xffa654, 0.8, 1.2, 2);
       glow.position.y = 0.02;
-      torch.add(nozzle, flame, core, glow);
+      // A soft halo around the flame: a camera-facing sprite with a radial fade, added on top of the scene
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: radialTexture([[0, 'rgba(150,190,255,0.9)'], [0.25, 'rgba(110,150,255,0.45)'], [0.6, 'rgba(255,160,90,0.12)'], [1, 'rgba(255,160,90,0)']]),
+        blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
+      }));
+      halo.scale.set(0.16, 0.16, 1);
+      halo.position.y = 0.04;
+      torch.add(nozzle, flame, core, glow, halo);
       torch.scale.setScalar(1.8);
       scene.add(torch);
 
@@ -1527,7 +1711,7 @@
       scene.add(pro);
       const barkTex = assets ? sideMat.map.clone() : null;
       if (barkTex) { barkTex.repeat.set(3, 5); barkTex.needsUpdate = true; }
-      const barkLook = extra => new THREE.MeshStandardMaterial(Object.assign({ color: assets ? 0x6b5444 : 0x3b2c22, map: barkTex, roughness: 1 }, extra));
+      const barkLook = extra => new THREE.MeshStandardMaterial(Object.assign({ color: assets ? 0x80695a : 0x4a3a2e, map: barkTex, roughness: 1 }, extra));
 
       // End grain: growth rings inside the cream sapwood and bark
       const ringCanvas = document.createElement('canvas');
@@ -1555,36 +1739,46 @@
       const tree = new THREE.Group();
       const log = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.96, R, LOG, 40), [logBark, endGrain, endGrain]);
       log.position.y = LOG / 2;
-      const crownBark = barkLook({ transparent: true });
-      const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c4527, roughness: 0.95, transparent: true });
-      const crown = new THREE.Group();
-      const upperTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, R * 0.96, 3.2, 24), crownBark);
-      upperTrunk.position.y = LOG + 1.6;
-      crown.add(upperTrunk);
-      // Crown: many soft, lumpy clumps of foliage in a broad, open dome, as walnuts grow
-      const leafSeed = { s: 11 };
-      const lr = () => ((leafSeed.s = (leafSeed.s * 16807) % 2147483647) / 2147483647);
-      for (let n = 0; n < 26; n++) {
-        const a = lr() * Math.PI * 2, rad = 0.4 + lr() * 1.6, y = 5.2 + lr() * 2.3 - rad * 0.35;
-        const r = 0.45 + lr() * 0.55;
-        const g = new THREE.SphereGeometry(r, 28, 18), pos = g.attributes.position;
-        for (let v = 0; v < pos.count; v++) {
-          const k = 1 + 0.18 * (Math.sin(pos.getX(v) * 9 + n) * Math.sin(pos.getY(v) * 7) + Math.sin(pos.getZ(v) * 11 - n) * 0.5);
-          pos.setXYZ(v, pos.getX(v) * k, pos.getY(v) * k * 0.85, pos.getZ(v) * k);
+      // Crown: a leafless winter walnut (walnut is usually felled in winter, when the sap is down).
+      // The branches are clipped at the floor so a felled crown rests on the ground instead of poking through it.
+      const floorClip = new THREE.Plane(new THREE.Vector3(0, 1, 0), T);
+      const crownBark = barkLook({ transparent: true, clippingPlanes: [floorClip], clipShadows: true });
+      const limbParts = [];
+      const UPV = new THREE.Vector3(0, 1, 0), limbQ = new THREE.Quaternion(), limbM = new THREE.Matrix4(), ONE = new THREE.Vector3(1, 1, 1);
+      let limbSeed = 23;
+      const lr = () => ((limbSeed = (limbSeed * 16807) % 2147483647) / 2147483647);
+      // One tapering limb from `from` along `dir`; it then splits into two or three thinner limbs, down to fine twigs
+      const growLimb = (from, dir, len, r0, depth) => {
+        const r1 = depth === 0 ? r0 * 0.3 : r0 * 0.66;
+        const g = new THREE.CylinderGeometry(r1, r0, len, depth > 2 ? 12 : 6, 1, true);
+        limbQ.setFromUnitVectors(UPV, dir);
+        g.applyMatrix4(limbM.compose(from.clone().addScaledVector(dir, len / 2), limbQ, ONE));
+        limbParts.push(g);
+        if (depth === 0) return;
+        const end = from.clone().addScaledVector(dir, len);
+        const kids = depth >= 3 ? 3 : 2 + (lr() < 0.4 ? 1 : 0), spin = lr() * Math.PI * 2;
+        for (let k = 0; k < kids; k++) {
+          // Lean each child away from its parent around a random spin, with a slight pull upward toward the light
+          const a = spin + k * (Math.PI * 2 / kids) + (lr() - 0.5) * 0.6, tilt = 0.55 + lr() * 0.4;
+          const side = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+          side.addScaledVector(dir, -side.dot(dir)).normalize();
+          const d = dir.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(side, Math.sin(tilt));
+          d.y += 0.12;
+          // The main limbs (off the short trunk section) are long and reach out wide, as an open-grown walnut does
+          growLimb(end, d.normalize(), depth === 5 ? 1.9 + lr() * 0.3 : len * (0.72 + lr() * 0.1), r1, depth - 1);
         }
-        g.computeVertexNormals();
-        const clump = new THREE.Mesh(g, leafMat);
-        clump.position.set(Math.cos(a) * rad, y, Math.sin(a) * rad);
-        crown.add(clump);
-      }
-      const branchGeo = new THREE.CylinderGeometry(0.035, 0.08, 1.7, 8);
-      for (const [a, y] of [[0.8, 4.7], [-1.1, 5.0], [2.4, 5.3], [-2.6, 4.9]]) {
-        const branch = new THREE.Mesh(branchGeo, crownBark);
-        branch.position.set(Math.cos(a) * 0.55, y + 0.5, Math.sin(a) * 0.55);
-        branch.rotation.set(Math.sin(a) * 0.75, 0, -Math.cos(a) * 0.75);
-        crown.add(branch);
-      }
-      tree.add(log, crown);
+      };
+      // The trunk carries on above the cut, then divides into the main limbs
+      growLimb(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 0.6, R * 0.96, 5);
+      // Hundreds of branches merged into one mesh: one draw call, cheap even on phones
+      const crown = new THREE.Mesh(mergeGeometries(limbParts), crownBark);
+      limbParts.forEach(g => g.dispose());
+      crown.position.y = LOG; // the crown starts where it will be cut from the log
+      // The saw kerf: a dark line around the trunk where the crown is cut off
+      const kerf = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.968, R * 0.968, 0.014, 48, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0x120a05, transparent: true, opacity: 0 }));
+      kerf.position.y = LOG - 0.02;
+      tree.add(log, crown, kerf);
       tree.traverse(o => { if (o.isMesh) o.castShadow = true; });
       pro.add(tree);
 
@@ -1666,11 +1860,16 @@
         tree.rotation.z = -Math.PI / 2 * f;
         tree.position.set(-LOG / 2, mix(-T, AXIS_Y, f), 0);
 
-        // Bucking: the crown is cut free and hauled off along the trunk line
-        const buck = smoother(at(PRO.buck));
-        crown.visible = buck < 1;
-        crown.position.y = 2.6 * buck;
-        crownBark.opacity = leafMat.opacity = 1 - buck;
+        // Bucking: a saw line appears around the trunk, then the crown breaks free, rolls a little and is
+        // dragged off along the trunk line; it only fades once it is well out of the shot
+        const buck = at(PRO.buck);
+        const cut = smoother(clamp01(buck / 0.35)), off = smoother(clamp01((buck - 0.35) / 0.65));
+        kerf.visible = buck > 0 && off < 0.05;
+        kerf.material.opacity = cut;
+        crown.visible = off < 1;
+        crown.position.y = LOG + 0.05 * cut + 3.2 * off * off;
+        crown.rotation.y = 0.7 * off;
+        crownBark.opacity = 1 - smoother(clamp01((off - 0.6) / 0.4));
 
         // Milling: the carriage runs the length of the log; behind the blade the slabs show
         const ml = at(PRO.mill), bladeX = mix(-LOG / 2 - 0.35, LOG / 2 + 0.35, ml);
@@ -1699,13 +1898,19 @@
         stickers.visible = stickMat.opacity > 0.01;
         for (const c of stickers.children) c.castShadow = stickMat.opacity > 0.6;
 
+        // Contact shadow: a small pool at the trunk's foot, stretching out along the trunk as it falls,
+        // then the log's footprint (log, mill, stack), widening as the matched pair is carried out
+        const lying = smoother(clamp01(fall * 1.6 - 0.5));
+        setContact(mix(-LOG / 2, 0, lying), 0, mix(1.3, LOG * 1.08, lying), mix(1.3, 1.0, lying) + 1.9 * pick, 0.72);
+
         // The tall tree needs a wider, more distant shadow camera than the table
         const wide = q < 0.45;
         if (wide) sun.position.multiplyScalar(3);
         if (wide !== wideShadow) {
           wideShadow = wide;
-          const e = wide ? 7 : 2.6;
-          Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, far: wide ? 40 : 14 });
+          // The table area is wide enough to hold the long, low shadow of the finished table on its legs
+          const e = wide ? 7 : 4;
+          Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, far: wide ? 40 : 18 });
           sun.shadow.camera.updateProjectionMatrix();
         }
       };
@@ -1719,8 +1924,19 @@
 
         const pour = seg(p, STAGE.pour);
         resin.visible = pour > 0;
-        pourFront.constant = -HALF + (L + 0.05) * easeOut(Math.min(1, pour * 1.25));
-        const level = 0.3 + 0.7 * easeOut(pour);
+        // The flowing front (drawn by the resin shader) leads; the flat clipping plane just keeps the
+        // side faces and shadow a little ahead of it
+        const level = 0.3 + 0.7 * easeOut(pour); // how full the river is
+        const flowX = mix(-HALF - 0.05, HALF + 0.3, easeOut(Math.min(1, pour * 1.25)));
+        FINISH.uPourX.value = flowX;
+        pourFront.constant = flowX + 0.05;
+        // The pouring stream: a thin ribbon of epoxy falling into the far end, thinning out once the river is full
+        const streamOn = pour > 0 && pour < 0.92;
+        pourStream.visible = streamOn;
+        if (streamOn) {
+          pourStream.scale.set(1 - 0.6 * smoother(clamp01((pour - 0.6) / 0.32)), 1, 1);
+          pourStream.position.set(-HALF + 0.12, -T * (1 - level), riverMid(-HALF + 0.12));
+        }
         resin.scale.y = level;
         resin.position.y = -T * (1 - level);
 
@@ -1742,7 +1958,7 @@
         const up = smoother(seg(p, STAGE.mold)), off = smoother(seg(p, STAGE.demold));
         mold.visible = up > 0 && off < 1;
         mold.scale.y = Math.max(0.001, up);
-        moldMat.opacity = 1 - off;
+        moldMat.opacity = tapeMat.opacity = screwMat.opacity = 1 - off;
         for (const w of walls) w.position.set(w.userData.x + w.userData.out[0] * 0.3 * off, 0, w.userData.z + w.userData.out[1] * 0.3 * off);
 
         // Bubbles appear behind the pour front and burst as the torch passes over them
@@ -1750,9 +1966,17 @@
         const tc = seg(p, STAGE.torch), torchX = mix(-HALF - 0.12, HALF + 0.12, smoother(tc));
         const top = -T * (1 - level);
         bubbles.forEach((b, n) => {
-          const born = clamp01((pourX - b.x) / 0.25), popped = tc > 0 && b.x < torchX - 0.02;
-          const s = popped ? 0 : b.r * born;
-          bp.set(b.x, top + s * 0.35, b.z);
+          // Born deep in the epoxy behind the front, each bubble drifts up toward the surface...
+          const age = (pourX - b.x) / 0.9;
+          const born = clamp01(age * 4);
+          let y = mix(-T * 0.85, top, smoother(clamp01(age)));
+          // ...and the torch's heat drives the stragglers straight up just ahead of the flame
+          const ahead = b.x - torchX;
+          if (tc > 0 && ahead < 0.3) y = mix(y, top, smoother(clamp01(1 - ahead / 0.3)));
+          // Under the flame it swells for an instant and pops
+          const pop = tc > 0 ? clamp01((torchX - b.x + 0.03) / 0.06) : 0;
+          const s = pop >= 1 ? 0 : b.r * born * (1 + 1.2 * pop);
+          bp.set(b.x, y + s * 0.35, b.z);
           bs.setScalar(Math.max(s, 1e-5));
           bubbleMesh.setMatrixAt(n, bm.compose(bp, bq, bs));
         });
@@ -1763,7 +1987,11 @@
         if (torch.visible) {
           const lift = Math.min(clamp01(tc / 0.1), clamp01((1 - tc) / 0.1));
           torch.position.set(torchX, top + 0.25 * (1 - lift), riverMid(torchX) + 0.05 * Math.sin(tc * 40));
-          glow.intensity = 0.8 * lift;
+          // A gentle flicker as it moves, so the flame feels alive
+          const flicker = 0.85 + 0.1 * Math.sin(tc * 310) + 0.05 * Math.sin(tc * 970);
+          glow.intensity = 1.6 * lift * flicker;
+          halo.material.opacity = lift * flicker;
+          flame.scale.y = core.scale.y = 0.9 + 0.15 * flicker;
         }
 
         // Sander zigzags over the whole top, then lifts off
@@ -1792,15 +2020,31 @@
         const wipe = seg(p, STAGE.wipe);
         FINISH.uWipeX.value = mix(-HALF - 0.35, HALF + 0.45, smoother(wipe));
 
+        // Legs grow up out of the floor while the finished top rises onto them
+        const rise = smoother(seg(p, STAGE.legs));
+        legs.visible = rise > 0;
+        legs.scale.y = Math.max(0.001, rise);
+        tableTop.position.y = LIFT * rise;
+
         // Light drops to a low rake from across the far side, just off the mirror angle, so the oiled top catches a sheen
         const rake = smoother(seg(p, STAGE.rake));
         sun.position.set(mix(-2.2, -3.2, rake), mix(4.4, 1.9, rake), mix(2.4, -2.4, rake));
-        sun.intensity = baseSun * mix(1, 0.72, rake);
-        scene.environmentIntensity = baseEnv * mix(1, 0.7, rake);
+        sun.intensity = baseSun * mix(1, 0.6, rake);
+        // Dim the room reflections at low angles so the glossy epoxy keeps its blue instead of mirroring white
+        scene.environmentIntensity = baseEnv * mix(1, 0.5, rake);
         scene.environmentRotation.y = mix(-0.6, 0.9, p);
 
-        applyPrologue(P);
+        // Contact shadow under the tabletop: tight while it sits on the floor, wider and softer once it is up on its legs
+        setContact(0, 0, L * mix(1.06, 1.25, rise), (W + 2 * spread) * mix(1.08, 1.35, rise), mix(0.75, 0.42, rise));
+        applyPrologue(P); // during the prologue this moves the contact shadow to the tree, log or stack
+
         const shot = shotAt(P, spread);
+        // The pool of floor light follows whatever the camera is looking at
+        floorGlow.position.x = (shot.min[0] + shot.max[0]) / 2;
+        floorGlow.position.z = (shot.min[2] + shot.max[2]) / 2;
+        // Kept small enough that it fades out well inside the canvas, so the canvas edge never shows as a lighter box
+        const reach = 1.25 * Math.max(shot.max[0] - shot.min[0], shot.max[2] - shot.min[2]);
+        floorGlow.scale.set(reach, reach, 1);
         camera.fov = shot.fov;
         frameBox(camera, shot);
         renderer.render(scene, camera);
@@ -1827,10 +2071,16 @@
       const total = section.offsetHeight - innerHeight;
       return total > 0 ? clamp01(-rect.top / total) : 1;
     }
+    // After a step name is clicked, that step stays the lit one while the page scrolls to it,
+    // so the steps in between don't flash on and off along the way
+    let jumpTo = -1, jumpTimer = 0;
+    function endJump() { jumpTo = -1; clearTimeout(jumpTimer); }
     function updateSteps(p) {
       let active = 0;
       STEP_START.forEach((start, i) => { if (p >= start - 0.001) active = i; });
-      stepItems.forEach((li, i) => li.classList.toggle('on', i === active));
+      if (jumpTo >= 0) active = jumpTo;
+      // Only touch the one or two items whose state actually changes
+      stepItems.forEach((li, i) => { if (li.classList.contains('on') !== (i === active)) li.classList.toggle('on', i === active); });
       bar.style.height = (p * 100) + '%';
     }
 
@@ -1844,6 +2094,8 @@
       const before = current;
       current += (target - current) * (1 - Math.exp(-dt * 7));
       if (Math.abs(target - current) < 0.0003) current = target;
+      // A clicked jump is over once the animation has arrived at that step
+      if (jumpTo >= 0 && current === target && Math.abs(target - STEP_LAND[jumpTo]) < 0.01) endJump();
       if (current !== before || needsRender) {
         needsRender = false;
         if (!reducedMotion) updateSteps(current);
@@ -1861,8 +2113,15 @@
       stepLinks.forEach((link, i) => link.addEventListener('click', () => {
         const total = section.offsetHeight - innerHeight;
         const top = section.getBoundingClientRect().top + scrollY + total * STEP_LAND[i];
+        // Light the clicked step straight away and hold it until the animation has caught up (or 2.5 s at most)
+        jumpTo = i;
+        clearTimeout(jumpTimer);
+        jumpTimer = setTimeout(() => { endJump(); kick(); }, 2500);
+        updateSteps(current);
         scrollTo({ top: Math.round(top), behavior: 'smooth' });
       }));
+      // If the visitor takes over scrolling mid-jump, go back to following the scroll position
+      for (const type of ['wheel', 'touchstart', 'keydown']) addEventListener(type, () => { if (jumpTo >= 0) { endJump(); kick(); } }, { passive: true });
     }
     addEventListener('resize', () => { resize(); needsRender = true; kick(); });
 
@@ -1873,8 +2132,10 @@
       if (visible) kick();
     }).observe(section);
 
-    // Build the scene shortly before the section scrolls into view
-    new IntersectionObserver((entries, obs) => {
+    // Build the scene shortly before the section scrolls into view. With reduced motion turned on, the 3D scene
+    // (and its 5 MB of textures) is never loaded: the still of the finished table stays, with every step listed.
+    if (reducedMotion) art.classList.add('static');
+    else new IntersectionObserver((entries, obs) => {
       if (entries.some(e => e.isIntersecting)) { obs.disconnect(); init(); }
     }, { rootMargin: '1200px 0px' }).observe(section);
   </script>
