@@ -188,7 +188,7 @@
     /* Scroll-driven build */
     .build {
       position: relative;
-      height: 300vh;
+      height: 440vh;
       background: var(--green-deep);
       color: #ece8de;
     }
@@ -213,10 +213,18 @@
     }
     .steps { list-style: none; margin: 0; padding: 0; }
     .steps li {
-      padding-block: 10px;
+      padding-block: 7px;
       opacity: 0.38;
       transition: opacity 0.35s;
     }
+    /* Every step title stays visible and clickable; only the current step opens its description */
+    .steps li p {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 0.45s ease, opacity 0.3s ease;
+    }
+    .steps li.on p { max-height: 9em; opacity: 1; }
     .steps li.on { opacity: 1; }
     .steps li:not(.on):hover { opacity: 0.7; }
     .steps h3 { font-size: 21px; }
@@ -389,21 +397,19 @@
         align-content: center;
         gap: 18px;
       }
-      .build { height: 260vh; }
-      .build-art { order: -1; aspect-ratio: 4 / 3; max-height: 44vh; }
-      .build-copy h2 { font-size: 26px; margin-bottom: 14px; }
-      /* On phones every step title stays tappable; only the current step shows its description */
-      .steps li { padding-block: 5px; }
-      .steps h3 { font-size: 18px; }
-      .steps li p { display: none; }
-      .steps li.on p { display: block; font-size: 15px; }
+      .build { height: 380vh; }
+      .build-art { order: -1; aspect-ratio: 4 / 3; max-height: 40vh; }
+      .build-copy h2 { font-size: 24px; margin-bottom: 10px; }
+      .steps li { padding-block: 3px; }
+      .steps h3 { font-size: 17px; }
+      .steps li.on p { font-size: 15px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
       .build { height: auto; padding-block: 100px; }
       .build-stage { position: static; height: auto; }
       .steps li { opacity: 1; display: block; }
-      .steps li p { display: block; }
+      .steps li p { max-height: none; opacity: 1; transition: none; }
       .step-link { cursor: default; pointer-events: none; }
       .build-art::before, .build-art canvas { transition: none; }
       .gallery figure img { transition: none; }
@@ -511,16 +517,28 @@
               <p>Two slabs from the same log, live edges turned to face each other. The bark comes off by hand so the edge keeps its shape.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>02</span>The pour</button></h3>
+              <h3><button type="button" class="step-link"><span>02</span>Flattened</button></h3>
+              <p>A router rides a sled over each slab, taking off a little at a time until the faces are dead flat and the boards no longer rock.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>03</span>The mold</button></h3>
+              <p>A melamine form goes up around the slabs, its seams taped and sealed so not a drop of epoxy can escape.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>04</span>The pour</button></h3>
               <p>Tinted epoxy runs down the gap between them, poured in layers so it cures clear and doesn't crack from its own heat.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>03</span>A butterfly key</button></h3>
+              <h3><button type="button" class="step-link"><span>05</span>Torched and cured</button></h3>
+              <p>A quick pass with a torch draws trapped air to the surface and pops it. Then the table sits for three days to harden before the mold comes off.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>06</span>A butterfly key</button></h3>
               <p>Where the wood has checked, a walnut bowtie is cut in across the crack so it can never open further.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>04</span>Flattened and finished</button></h3>
-              <p>The whole top is flattened and sanded up through the grits, then oil goes on by hand, darkening the grain and bringing up the shine.</p>
+              <h3><button type="button" class="step-link"><span>07</span>Sanded and oiled</button></h3>
+              <p>The whole top is sanded from 80 grit up to 400, then oil goes on by hand, darkening the grain and bringing up the shine.</p>
             </li>
           </ol>
         </div>
@@ -731,18 +749,24 @@
 
     // ---------- Timeline, as fractions of the section's scroll ----------
     const STAGE = {
-      slabs: [0, 0.2],
-      pour: [0.22, 0.44],
-      crack: [0.49, 0.54],
-      scribe: [0.54, 0.59],
-      mortise: [0.59, 0.64],
-      key: [0.64, 0.76],
-      flush: [0.78, 0.84],   // the proud key is planed flush
-      rake: [0.78, 0.92],    // light drops to a low raking angle
-      wipe: [0.84, 0.98]     // oil goes on along the grain
+      slabs: [0, 0.07],
+      bark: [0.06, 0.12],     // bark peels off the live edges
+      flatten: [0.14, 0.24],  // router sled passes over the slabs
+      mold: [0.26, 0.32],     // melamine walls go up
+      pour: [0.34, 0.47],
+      torch: [0.49, 0.57],    // flame pops the bubbles
+      demold: [0.58, 0.63],   // cured; the mold comes off
+      crack: [0.65, 0.68],
+      scribe: [0.68, 0.71],
+      mortise: [0.71, 0.74],
+      key: [0.74, 0.81],
+      flush: [0.82, 0.86],    // the proud key is planed flush
+      sand: [0.84, 0.91],     // random-orbit sander works over the top
+      rake: [0.84, 0.95],     // light drops to a low raking angle
+      wipe: [0.91, 0.99]      // oil goes on along the grain
     };
-    const STEP_START = [0, 0.22, 0.46, 0.78]; // where each numbered step begins
-    const STEP_LAND = [0.2, 0.44, 0.76, 1];   // where a step link scrolls to: that step, completed
+    const STEP_START = [0, 0.13, 0.25, 0.33, 0.48, 0.64, 0.83];      // where each numbered step begins
+    const STEP_LAND = [0.12, 0.245, 0.325, 0.475, 0.635, 0.815, 1]; // where a step link scrolls to: that step, completed
 
     // ---------- Table layout (metres; x along the table, z across it) ----------
     const L = 3.2, W = 1.5, T = 0.09, HALF = L / 2;
@@ -1141,13 +1165,25 @@
     // The key's end of the table, edge to edge across its width, so the close-up only ever crops on one side
     const KEY_BOX = { min: [0.35, -T, -W / 2], max: [HALF + 0.02, 0.02, W / 2 + 0.02] };
     // Camera keyframes. Bearing 0 looks from +z, bearing pi/2 from +x; the key sits at the +x, +z corner.
+    // Boxes that include the tools working above the table
+    const BOXES = {
+      key: KEY_BOX,
+      table: tableBox(0),
+      sled: { min: [-HALF - 0.2, -T, -W / 2 - 0.15], max: [HALF + 0.2, 0.32, W / 2 + 0.15] },
+      mold: { min: [-HALF - 0.03, -T, -W / 2 - 0.03], max: [HALF + 0.03, 0.03, W / 2 + 0.03] },
+      torch: { min: [-HALF, -T, -W / 2], max: [HALF, 0.16, W / 2] }
+    };
     const SHOTS = [
       { p: 0, az: -0.5, el: 0.8, box: 'spread', margin: 0.08, fov: 30 },
-      { p: 0.3, az: -0.22, el: 0.7, box: 'table', margin: 0.06, fov: 30 },
-      { p: 0.46, az: -0.1, el: 0.72, box: 'table', margin: 0.06, fov: 30 },
-      { p: 0.54, az: 0.55, el: 1.0, box: 'key', margin: 0.06, fov: 30 },
-      { p: 0.77, az: 0.65, el: 0.96, box: 'key', margin: 0.06, fov: 30 },
-      { p: 0.9, az: 1.4, el: 0.42, box: 'table', margin: 0.04, fov: 40 },
+      { p: 0.12, az: -0.42, el: 0.76, box: 'table', margin: 0.06, fov: 30 },
+      { p: 0.24, az: -0.3, el: 0.62, box: 'sled', margin: 0.05, fov: 30 },
+      { p: 0.32, az: -0.2, el: 0.6, box: 'mold', margin: 0.06, fov: 30 },
+      { p: 0.47, az: -0.1, el: 0.72, box: 'mold', margin: 0.06, fov: 30 },
+      { p: 0.57, az: 0.02, el: 0.74, box: 'torch', margin: 0.06, fov: 30 },
+      { p: 0.64, az: 0.25, el: 0.86, box: 'table', margin: 0.06, fov: 30 },
+      { p: 0.67, az: 0.55, el: 1.0, box: 'key', margin: 0.06, fov: 30 },
+      { p: 0.82, az: 0.65, el: 0.96, box: 'key', margin: 0.06, fov: 30 },
+      { p: 0.92, az: 1.4, el: 0.42, box: 'table', margin: 0.04, fov: 40 },
       // Product shot: low three-quarter from the key's corner, looking down the length, settling in while the oil goes on
       { p: 1, az: 1.3, el: 0.34, box: 'table', margin: 0.03, fov: 44 }
     ];
@@ -1155,7 +1191,7 @@
       let i = 0;
       while (i < SHOTS.length - 2 && p > SHOTS[i + 1].p) i++;
       const a = SHOTS[i], b = SHOTS[i + 1], t = smoother(clamp01((p - a.p) / (b.p - a.p)));
-      const box = s => (s.box === 'key' ? KEY_BOX : tableBox(s.box === 'spread' ? spread : 0));
+      const box = s => (s.box === 'spread' ? tableBox(spread) : BOXES[s.box]);
       const ba = box(a), bb = box(b);
       return {
         az: mix(a.az, b.az, t), el: mix(a.el, b.el, t), margin: mix(a.margin, b.margin, t), fov: mix(a.fov, b.fov, t),
@@ -1330,6 +1366,116 @@
       key.position.set(KEY_X, 0, CRACK_Z);
       slabR.add(mortise, scribe, key);
 
+      // ----- Shop process: bark, router sled, mold, bubbles, torch, sander -----
+      // Bark: a rough strip along each live edge, peeled away from one end to the other
+      const barkCut = new THREE.Plane(new THREE.Vector3(1, 0, 0), HALF + 0.2);
+      const barkMat = new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: 1, clippingPlanes: [barkCut], clipShadows: true });
+      if (assets) Object.assign(barkMat, { map: sideMat.map, normalMap: sideMat.normalMap, color: new THREE.Color(0x3a2a20) });
+      const barkStrip = (fn, dir) => {
+        const outer = edgePoints(x => fn(x) + dir * 0.04 * (0.75 + 0.25 * Math.sin(x * 9) + 0.15 * Math.sin(x * 31)), HALF, -HALF, N);
+        const g = extrude(new THREE.Shape([...edgePoints(fn, -HALF, HALF, N), ...outer]), T + 0.012);
+        g.translate(0, 0.012, 0);
+        const m = new THREE.Mesh(g, barkMat);
+        m.castShadow = true;
+        return m;
+      };
+      slabL.add(barkStrip(edgeL, 1));
+      slabR.add(barkStrip(edgeR, -1));
+
+      // Router sled: rails along both sides, a bridge that walks the length, a router that sweeps across it
+      const alu = new THREE.MeshStandardMaterial({ color: 0xb9bdc1, metalness: 0.85, roughness: 0.32 });
+      const black = new THREE.MeshStandardMaterial({ color: 0x1d1f21, roughness: 0.55 });
+      const sled = new THREE.Group(), bridge = new THREE.Group(), router = new THREE.Group();
+      for (const z of [-W / 2 - 0.12, W / 2 + 0.12]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(L + 0.5, 0.04, 0.05), alu);
+        rail.position.set(0, 0.17, z);
+        sled.add(rail);
+        for (const x of [-HALF - 0.2, HALF + 0.2]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.17 + T, 0.05), black);
+          leg.position.set(x, (0.17 - T) / 2, z);
+          sled.add(leg);
+        }
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, W + 0.34), alu);
+      beam.position.y = 0.215;
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.012, 0.2), black);
+      base.position.y = 0.245;
+      const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.2, 24), black);
+      motor.position.y = 0.35;
+      const collet = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.23, 12), alu);
+      collet.position.y = 0.125;
+      const bit = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 20), alu);
+      bit.position.y = 0.008;
+      router.add(base, motor, collet, bit);
+      bridge.add(beam, router);
+      sled.add(bridge);
+      sled.traverse(o => { o.castShadow = true; });
+      scene.add(sled);
+
+      // Mold: white melamine walls around the slabs
+      const moldMat = new THREE.MeshStandardMaterial({ color: 0xf1f0eb, roughness: 0.38, transparent: true });
+      const mold = new THREE.Group(), MH = T + 0.035, MT = 0.022;
+      const walls = [
+        [L + 2 * MT, W / 2 + MT / 2, 0, 1], [L + 2 * MT, -W / 2 - MT / 2, 0, -1],
+        [MT, 0, HALF + MT / 2, 1], [MT, 0, -HALF - MT / 2, -1]
+      ].map(([len, z, x, side], n) => {
+        const g = n < 2 ? new THREE.BoxGeometry(len, MH, MT) : new THREE.BoxGeometry(MT, MH, W);
+        g.translate(0, MH / 2, 0);
+        const m = new THREE.Mesh(g, moldMat);
+        m.position.set(x, 0, z);
+        m.userData = { x, z, out: n < 2 ? [0, side] : [side, 0] };
+        m.castShadow = m.receiveShadow = true;
+        mold.add(m);
+        return m;
+      });
+      mold.position.y = -T;
+      scene.add(mold);
+
+      // Bubbles: trapped air that rises as the epoxy goes in
+      let seed = 7;
+      const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const bubbles = [];
+      for (let n = 0; n < 110; n++) {
+        const x = -HALF + 0.08 + rand() * (L - 0.16);
+        const z0 = edgeL(x) + 0.02, z1 = edgeR(x) - 0.02;
+        if (z1 > z0) bubbles.push({ x, z: mix(z0, z1, rand()), r: 0.003 + rand() * 0.007 });
+      }
+      const bubbleMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8),
+        new THREE.MeshPhysicalMaterial({ color: 0xe8f6ff, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.75 }), bubbles.length);
+      scene.add(bubbleMesh);
+      const bm = new THREE.Matrix4(), bq = new THREE.Quaternion(), bp = new THREE.Vector3(), bs = new THREE.Vector3();
+
+      // Torch: a brass nozzle with a blue flame, warming the resin as it passes
+      const torch = new THREE.Group();
+      const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.02, 0.16, 16), new THREE.MeshStandardMaterial({ color: 0xb08d4a, metalness: 0.9, roughness: 0.3 }));
+      nozzle.position.y = 0.2;
+      const flameMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 20, 1, true), flameMat(0x4f86ff));
+      flame.rotation.x = Math.PI;
+      flame.position.y = 0.065;
+      const core = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.07, 16, 1, true), flameMat(0xbfe0ff));
+      core.rotation.x = Math.PI;
+      core.position.y = 0.09;
+      const glow = new THREE.PointLight(0xffa654, 0.8, 0.7, 2);
+      glow.position.y = 0.02;
+      torch.add(nozzle, flame, core, glow);
+      torch.scale.setScalar(1.8);
+      scene.add(torch);
+
+      // Random-orbit sander
+      const sander = new THREE.Group();
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 32), black);
+      pad.position.y = 0.01;
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.07, 32), new THREE.MeshStandardMaterial({ color: 0x2f5d78, roughness: 0.45 }));
+      body.position.y = 0.055;
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), black);
+      knob.position.y = 0.09;
+      sander.add(pad, body, knob);
+      sander.traverse(o => { o.castShadow = true; });
+      scene.add(sander);
+
+      const riverMid = x => (edgeL(x) + edgeR(x)) / 2;
+
       apply = p => {
         const spread = 0.6 * (1 - easeOut(seg(p, STAGE.slabs)));
         slabL.position.z = -spread;
@@ -1341,6 +1487,57 @@
         const level = 0.3 + 0.7 * easeOut(pour);
         resin.scale.y = level;
         resin.position.y = -T * (1 - level);
+
+        // Bark peels from the far end toward the near end
+        barkCut.constant = -mix(-HALF - 0.1, HALF + 0.1, smoother(seg(p, STAGE.bark)));
+
+        // Router sled lowers in, walks the length with the router sweeping side to side, then lifts away
+        const fl = seg(p, STAGE.flatten);
+        sled.visible = fl > 0 && fl < 1;
+        if (sled.visible) {
+          const inOut = Math.min(smoother(clamp01(fl / 0.12)), smoother(clamp01((1 - fl) / 0.12)));
+          sled.position.y = 0.5 * (1 - inOut);
+          const travel = clamp01((fl - 0.08) / 0.84);
+          bridge.position.x = mix(-HALF - 0.05, HALF + 0.05, travel);
+          router.position.z = (W / 2 - 0.08) * Math.sin(travel * Math.PI * 14);
+        }
+
+        // Mold walls rise around the slabs, stay through the pour and cure, then slide away
+        const up = smoother(seg(p, STAGE.mold)), off = smoother(seg(p, STAGE.demold));
+        mold.visible = up > 0 && off < 1;
+        mold.scale.y = Math.max(0.001, up);
+        moldMat.opacity = 1 - off;
+        for (const w of walls) w.position.set(w.userData.x + w.userData.out[0] * 0.3 * off, 0, w.userData.z + w.userData.out[1] * 0.3 * off);
+
+        // Bubbles appear behind the pour front and burst as the torch passes over them
+        const pourX = pourFront.constant;
+        const tc = seg(p, STAGE.torch), torchX = mix(-HALF - 0.12, HALF + 0.12, smoother(tc));
+        const top = -T * (1 - level);
+        bubbles.forEach((b, n) => {
+          const born = clamp01((pourX - b.x) / 0.25), popped = tc > 0 && b.x < torchX - 0.02;
+          const s = popped ? 0 : b.r * born;
+          bp.set(b.x, top + s * 0.35, b.z);
+          bs.setScalar(Math.max(s, 1e-5));
+          bubbleMesh.setMatrixAt(n, bm.compose(bp, bq, bs));
+        });
+        bubbleMesh.instanceMatrix.needsUpdate = true;
+        bubbleMesh.visible = pour > 0 && tc < 1;
+
+        torch.visible = tc > 0 && tc < 1;
+        if (torch.visible) {
+          const lift = Math.min(clamp01(tc / 0.1), clamp01((1 - tc) / 0.1));
+          torch.position.set(torchX, top + 0.25 * (1 - lift), riverMid(torchX) + 0.05 * Math.sin(tc * 40));
+          glow.intensity = 0.8 * lift;
+        }
+
+        // Sander zigzags over the whole top, then lifts off
+        const sd = seg(p, STAGE.sand);
+        sander.visible = sd > 0 && sd < 1;
+        if (sander.visible) {
+          const lift = Math.min(clamp01(sd / 0.1), clamp01((1 - sd) / 0.1));
+          sander.position.set(mix(-HALF + 0.15, HALF - 0.15, sd), 0.25 * (1 - lift), (W / 2 - 0.15) * Math.sin(sd * Math.PI * 10));
+          pad.rotation.y = sd * 300;
+        }
 
         const seated = p >= STAGE.key[1];
         crack.visible = p > STAGE.crack[0];
