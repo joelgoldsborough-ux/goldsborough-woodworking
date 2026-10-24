@@ -586,7 +586,7 @@
           </ol>
         </div>
       </div>
-      <div class="build-art" role="img" aria-label="A finished walnut live-edge river table with a blue epoxy river, a butterfly key across a crack, and black steel legs">
+      <div class="build-art" role="img" aria-label="A finished walnut river table with natural live edges all round, a blue epoxy river, a butterfly key across a crack, and black steel legs">
         <span class="build-loading" aria-hidden="true">Loading the 3D model</span>
       </div>
     </div>
@@ -835,6 +835,10 @@
     const S = Math.sin;
     const edgeL = x => -0.15 + 0.07 * S(1.7 * x + 0.4) + 0.035 * S(4.3 * x + 1.1) + 0.012 * S(11 * x) + 0.005 * S(37 * x + 2) + 0.004 * S(53 * x);
     const edgeR = x => 0.16 + 0.06 * S(1.3 * x + 2.0) + 0.03 * S(5.1 * x + 0.3) + 0.012 * S(13 * x + 1) + 0.005 * S(41 * x + 1) + 0.004 * S(59 * x + 3);
+    // Outer live edges: a slab cut from a log has bark on both edges, so the table's outside edges are natural too.
+    // They wander a few centimetres but always stay just inside the mold walls (which sit at z = ±W/2).
+    const outerL = x => -W / 2 + 0.05 + 0.022 * S(1.9 * x + 0.7) + 0.013 * S(5.3 * x + 2.0) + 0.005 * S(17 * x + 1) + 0.003 * S(43 * x);
+    const outerR = x => W / 2 - 0.05 - 0.02 * S(1.6 * x + 2.6) - 0.014 * S(4.7 * x + 0.9) - 0.005 * S(19 * x + 2) - 0.003 * S(47 * x + 1);
     const CRACK_Z = 0.5, KEY_X = 1.34;
     const KEY_W = 0.12, KEY_H = 0.24; // area the key's own texture covers
 
@@ -842,7 +846,7 @@
     // Self-contained so it can run in a worker: everything it needs arrives in the argument.
     // Returns raw RGBA buffers; rows run from z = -W/2 upward, matching the top faces' UVs.
     // With `scan`, the walnut comes from photographed wood; without it, from the procedural fallback below.
-    function buildTextures({ cw, ch, L, W, eL, eR, kw, kh, scan }) {
+    function buildTextures({ cw, ch, L, W, eL, eR, oL, oR, kw, kh, scan }) {
       const perm = new Uint8Array(512), p = [];
       let seed = 1337;
       for (let i = 0; i < 256; i++) p[i] = i;
@@ -911,6 +915,14 @@
           if (z < eL[i]) { s = 0; d = eL[i] - z; edge = eL[i]; }
           else if (z > eR[i]) { s = 1; d = z - eR[i]; edge = eR[i]; }
           else {
+            wood[k] = 60; wood[k + 1] = 38; wood[k + 2] = 24; wood[k + 3] = 255;
+            surface[k] = 128; surface[k + 1] = 200; surface[k + 3] = 255;
+            continue;
+          }
+          // Distance to the nearer live edge (river side or outside), so both edges get sapwood and a bark line.
+          // The procedural ring pattern below still follows the river-side edge (`edge`), as before.
+          d = Math.min(d, s ? oR[i] - z : z - oL[i]);
+          if (d < 0) { // outside the slab altogether: never seen
             wood[k] = 60; wood[k + 1] = 38; wood[k + 2] = 24; wood[k + 3] = 255;
             surface[k] = 128; surface[k + 1] = 200; surface[k + 3] = 255;
             continue;
@@ -1262,6 +1274,8 @@
       sled: { min: [-HALF - 0.2, -T, -W / 2 - 0.15], max: [HALF + 0.2, 0.32, W / 2 + 0.15] },
       mold: { min: [-HALF - 0.03, -T, -W / 2 - 0.03], max: [HALF + 0.03, 0.03, W / 2 + 0.03] },
       torch: { min: [-HALF, -T, -W / 2], max: [HALF, 0.16, W / 2] },
+      // The pour, with headroom for the cup tipped above the far end
+      pour: { min: [-HALF - 0.3, -T, -W / 2 - 0.03], max: [HALF + 0.03, 0.8, W / 2 + 0.03] },
       finished: { min: [-HALF, -T, -W / 2], max: [HALF, LIFT, W / 2] }
     };
     // Prologue framing: the standing tree, the felled trunk, the log, the sawmill, the drying stack
@@ -1290,7 +1304,9 @@
       { p: 0.104, az: -0.42, el: 0.76, box: 'table', margin: 0.07, fov: 30 },
       { p: 0.208, az: -0.3, el: 0.62, box: 'sled', margin: 0.06, fov: 30 },
       { p: 0.278, az: -0.2, el: 0.6, box: 'mold', margin: 0.07, fov: 30 },
-      { p: 0.408, az: -0.1, el: 0.72, box: 'mold', margin: 0.07, fov: 30 },
+      { p: 0.3, az: -0.18, el: 0.58, box: 'pour', margin: 0.07, fov: 30 },
+      { p: 0.4, az: -0.1, el: 0.62, box: 'pour', margin: 0.07, fov: 30 },
+      { p: 0.415, az: -0.06, el: 0.72, box: 'mold', margin: 0.07, fov: 30 },
       { p: 0.494, az: 0.02, el: 0.74, box: 'torch', margin: 0.07, fov: 30 },
       { p: 0.547, az: 0.25, el: 0.86, box: 'table', margin: 0.08, fov: 30 },
       // Step 9: a clear, intentional close-up on the key
@@ -1354,13 +1370,13 @@
       renderer.localClippingEnabled = true;
 
       const cw = phone ? 1280 : 2048, ch = phone ? 600 : 960;
-      const eL = new Float32Array(cw), eR = new Float32Array(cw);
+      const eL = new Float32Array(cw), eR = new Float32Array(cw), oL = new Float32Array(cw), oR = new Float32Array(cw);
       for (let i = 0; i < cw; i++) {
         const x = ((i + 0.5) / cw - 0.5) * L;
-        eL[i] = edgeL(x); eR[i] = edgeR(x);
+        eL[i] = edgeL(x); eR[i] = edgeR(x); oL[i] = outerL(x); oR[i] = outerR(x);
       }
       const assets = await loadAssets().catch(e => { console.warn('River table assets unavailable, using procedural wood', e); return null; });
-      const tex = await generateTextures({ cw, ch, L, W, eL, eR, kw: 256, kh: 512, scan: assets ? assets.scan : null });
+      const tex = await generateTextures({ cw, ch, L, W, eL, eR, oL, oR, kw: 256, kh: 512, scan: assets ? assets.scan : null });
 
       scene = new THREE.Scene();
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1438,8 +1454,9 @@
       }
 
       const N = 240;
-      const leftShape = new THREE.Shape([new THREE.Vector2(-HALF, -W / 2), new THREE.Vector2(HALF, -W / 2), ...edgePoints(edgeL, HALF, -HALF, N)]);
-      const rightShape = new THREE.Shape([...edgePoints(edgeR, -HALF, HALF, N), new THREE.Vector2(HALF, W / 2), new THREE.Vector2(-HALF, W / 2)]);
+      // Each slab runs between its outer live edge and its river-side live edge
+      const leftShape = new THREE.Shape([...edgePoints(outerL, -HALF, HALF, N), ...edgePoints(edgeL, HALF, -HALF, N)]);
+      const rightShape = new THREE.Shape([...edgePoints(edgeR, -HALF, HALF, N), ...edgePoints(outerR, HALF, -HALF, N)]);
       const riverShape = new THREE.Shape([...edgePoints(edgeL, -HALF, HALF, N), ...edgePoints(edgeR, HALF, -HALF, N)]);
 
       const slabL = new THREE.Mesh(extrude(leftShape, T), [woodMat, sideMat]);
@@ -1559,8 +1576,9 @@
         m.castShadow = true;
         return m;
       };
-      slabL.add(barkStrip(edgeL, 1));
-      slabR.add(barkStrip(edgeR, -1));
+      // Bark along both live edges of each slab: the river side and the outside
+      slabL.add(barkStrip(edgeL, 1), barkStrip(outerL, -1));
+      slabR.add(barkStrip(edgeR, -1), barkStrip(outerR, 1));
 
       // Router sled: rails along both sides, a bridge that walks the length, a router that sweeps across it
       const alu = new THREE.MeshStandardMaterial({ color: 0xb9bdc1, metalness: 0.85, roughness: 0.32 });
@@ -1645,13 +1663,46 @@
       }
 
       // The stream of epoxy pouring in from a bucket above the far end (built from its bottom up, 0.7 m tall)
-      const streamGeo = new THREE.CylinderGeometry(0.009, 0.014, 0.7, 12, 1, true);
+      const streamGeo = new THREE.CylinderGeometry(0.012, 0.018, 0.7, 12, 1, true);
       streamGeo.translate(0, 0.35, 0);
       const pourStream = new THREE.Mesh(streamGeo, new THREE.MeshPhysicalMaterial({
         color: 0x1d8fc4, roughness: 0.08, clearcoat: 1, transparent: true, opacity: 0.9
       }));
       pourStream.visible = false;
       scene.add(pourStream);
+
+      // The mixing cup the epoxy is poured from: a translucent graduated cup with blue epoxy inside.
+      // It hangs from a pivot at its pouring lip, so tipping it swings the cup up and over around the lip,
+      // and the stream always leaves from the same point.
+      // Bucket-sized: a table this big takes a few gallons of epoxy
+      const CUP_H = 0.3, CUP_R0 = 0.12, CUP_R1 = 0.15; // height, bottom radius, rim radius
+      const cupPivot = new THREE.Group();
+      const cup = new THREE.Group();
+      const cupWall = new THREE.Mesh(
+        new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(CUP_R0, 0), new THREE.Vector2(CUP_R1, CUP_H), new THREE.Vector2(CUP_R1 + 0.004, CUP_H + 0.004)], 32),
+        new THREE.MeshPhysicalMaterial({ color: 0xf3f3ee, roughness: 0.35, transmission: 0.35, thickness: 0.01, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+      );
+      // Measurement lines printed on the cup
+      const marks = new THREE.Group();
+      for (let n = 1; n <= 4; n++) {
+        const y = CUP_H * n / 5, r = mix(CUP_R0, CUP_R1, n / 5) + 0.001;
+        const mark = new THREE.Mesh(new THREE.TorusGeometry(r, 0.002, 4, 32, 0.8), new THREE.MeshBasicMaterial({ color: 0x4a6b8a }));
+        mark.rotation.x = Math.PI / 2;
+        mark.position.y = y;
+        marks.add(mark);
+      }
+      // The epoxy still in the cup: it shrinks as the cup empties
+      const cupResin = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R1 - 0.008, CUP_R0 - 0.004, CUP_H * 0.8, 32),
+        new THREE.MeshPhysicalMaterial({ color: 0x1677b0, roughness: 0.1, clearcoat: 1 }));
+      cupResin.geometry.translate(0, CUP_H * 0.4 + 0.004, 0);
+      cup.add(cupWall, marks, cupResin);
+      // Shift the cup so its lip on the +x side sits exactly on the pivot
+      cup.position.set(-CUP_R1, -CUP_H, 0);
+      cupPivot.add(cup);
+      cupPivot.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      cupPivot.visible = false;
+      scene.add(cupPivot);
+      const CUP_X = -HALF + 0.14, LIP_Y = 0.5; // where the stream falls, and the lip's height while pouring
 
       // Bubbles: trapped air that rises as the epoxy goes in
       let seed = 7;
@@ -1792,24 +1843,40 @@
         slabFace.minFilter = THREE.LinearMipmapLinearFilter;
         slabFace.generateMipmaps = true;
         slabFace.anisotropy = aniso;
-        slabFace.repeat.set(LOG / 0.72, 0.62 / 0.4);
+        slabFace.repeat.set(1 / 0.72, 1 / 0.4); // the scan covers 72 by 40 cm of real wood
         slabFace.needsUpdate = true;
       }
-      const proSlabs = [-1.5, -0.5, 0.5, 1.5].map(k => {
-        const dy = k * T, w = 2 * Math.sqrt(R * R - Math.pow(Math.abs(dy) + T / 2, 2)) * 0.97;
-        // Same sanded, unfinished look as the table's slabs, so the hand-off between them is seamless
+      // Four slices come out of the log, bottom to top. The two middle ones ARE the table's slabs (the very same
+      // objects, live edges and bark included), so nothing swaps at the hand-off. The top and bottom slices are
+      // narrower live-edge offcuts that go back on the pile.
+      const shapeCentre = (a, b) => {
+        let sum = 0;
+        for (let i = 0; i <= 64; i++) { const x = -HALF + L * i / 64; sum += (a(x) + b(x)) / 2; }
+        return sum / 65;
+      };
+      const proSlabs = [-1.5, -0.5, 0.5, 1.5].map((k, n) => {
+        const dy = k * T;
+        if (n === 1) return { mesh: slabL, table: true, dy, cz: shapeCentre(outerL, edgeL), endZ: -0.6 };
+        if (n === 2) return { mesh: slabR, table: true, dy, cz: shapeCentre(edgeR, outerR), endZ: 0.6 };
+        // An offcut: as wide as the log allows at this height, with wavy bark edges on both sides
+        const half = Math.sqrt(R * R - Math.pow(Math.abs(dy) + T / 2, 2)) * 0.95, o = n * 3.1;
+        const wave = x => 0.014 * S(2.1 * x + o) + 0.007 * S(6.3 * x + 2 * o) + 0.003 * S(23 * x + o);
+        const XL = LOG / 2 - 0.01;
+        const shape = new THREE.Shape([
+          ...edgePoints(x => -half + 0.02 + wave(x), -XL, XL, 160),
+          ...edgePoints(x => half - 0.02 - wave(x + 1.7), XL, -XL, 160)
+        ]);
+        // Same sanded, unfinished look as the table's slabs
         const face = new THREE.MeshPhysicalMaterial({
           map: slabFace, color: assets ? 0xffffff : 0x6b4a33, roughness: 1, transparent: true,
           sheen: 1, sheenColor: new THREE.Color(0x4e4239), sheenRoughness: 0.9
         });
         addFinish(face, { name: 'stack', dry: 0.12, roughDry: 1, roughWet: 0.14, roughDone: 0.62, coat: 0 });
         const bark = barkLook({ transparent: true });
-        const end = new THREE.MeshStandardMaterial({ color: 0x6e4a30, roughness: 0.9, transparent: true });
-        const m = new THREE.Mesh(new THREE.BoxGeometry(LOG - 0.02, T - 0.004, w), [end, end, face, face, bark, bark]);
+        const m = new THREE.Mesh(extrude(shape, T - 0.004), [face, bark]);
         m.castShadow = m.receiveShadow = true;
-        m.userData = { dy, w, mats: [face, bark, end] };
         pro.add(m);
-        return m;
+        return { mesh: m, table: false, dy, mats: [face, bark] };
       });
 
       // Drying stack: bunks under the slabs and stickers between them
@@ -1881,18 +1948,24 @@
         // Stacking, drying, then choosing the matched pair
         const sep = smoother(at(PRO.stack)), dry = at(PRO.dry), pick = smoother(at(PRO.choose));
         proSlabs.forEach((s, n) => {
-          let y = mix(AXIS_Y + s.userData.dy, STACK_Y(n), sep), z = 0, fade = 1;
-          if (n === 1 || n === 2) {
-            y = mix(y, -T / 2, pick) + 0.35 * Math.sin(Math.PI * pick);
-            z = mix(0, n === 1 ? -1.05 : 1.05, pick);
-            s.scale.z = mix(1, 0.6 / s.userData.w, pick);
-          } else fade = 1 - clamp01(pick * 3);
-          s.position.set(0, y, z);
-          s.visible = ml > 0 && fade > 0.01;
-          s.castShadow = fade > 0.6;
+          // Each slice's top face: first in place inside the log, then on the drying stack
+          let y = mix(AXIS_Y + s.dy, STACK_Y(n), sep) + T / 2, z = 0;
+          if (s.table) {
+            // The matched pair is centred in the log (shifted by the slab's own centre line), then carried in an arc
+            // to exactly where the next step picks them up: on the floor, spread apart
+            z = mix(-s.cz, s.endZ, pick);
+            y = mix(y, 0, pick) + 0.35 * Math.sin(Math.PI * pick);
+            s.mesh.position.set(0, y, z);
+            s.mesh.visible = ml > 0;
+            return;
+          }
+          const fade = 1 - clamp01(pick * 3);
+          s.mesh.position.set(0, y - 0.002, z);
+          s.mesh.visible = ml > 0 && fade > 0.01;
+          s.mesh.castShadow = fade > 0.6;
           // Fresh-sawn walnut is paler and greyer; it deepens as it dries
-          s.userData.mats[0].color.setScalar(mix(1.1, 0.92, dry));
-          for (const m of s.userData.mats) m.opacity = fade;
+          s.mats[0].color.setScalar(mix(1.1, 0.92, dry));
+          for (const m of s.mats) m.opacity = fade;
         });
         stickMat.opacity = sep * (1 - clamp01(pick * 3));
         stickers.visible = stickMat.opacity > 0.01;
@@ -1917,25 +1990,47 @@
 
       apply = P => {
         const p = clamp01((P - P0) / (1 - P0));
-        slabL.visible = slabR.visible = P >= P0;
+        // The slabs are always the same two objects; during the prologue applyPrologue (below) places them in the
+        // log and on the drying stack, and from step 4 on they sit on the floor here
+        slabL.visible = slabR.visible = true;
+        slabL.position.y = slabR.position.y = 0;
         const spread = 0.6 * (1 - easeOut(seg(p, STAGE.slabs)));
         slabL.position.z = -spread;
         slabR.position.z = spread;
 
+        // ----- The pour, in three beats -----
+        // 0 to 0.14: the cup swings in above the end of the river and tips until the epoxy reaches the lip
+        // 0.14 to 0.88: it pours; the stream lands and the epoxy flows down the river and rises
+        // 0.88 to 1: the empty cup tips back upright and lifts away
         const pour = seg(p, STAGE.pour);
-        resin.visible = pour > 0;
+        const fill = clamp01((pour - 0.14) / 0.74); // how far the pouring itself has got
+        resin.visible = fill > 0;
         // The flowing front (drawn by the resin shader) leads; the flat clipping plane just keeps the
         // side faces and shadow a little ahead of it
-        const level = 0.3 + 0.7 * easeOut(pour); // how full the river is
-        const flowX = mix(-HALF - 0.05, HALF + 0.3, easeOut(Math.min(1, pour * 1.25)));
+        const level = 0.3 + 0.7 * easeOut(fill); // how full the river is
+        const flowX = mix(-HALF - 0.05, HALF + 0.3, easeOut(Math.min(1, fill * 1.2)));
         FINISH.uPourX.value = flowX;
         pourFront.constant = flowX + 0.05;
-        // The pouring stream: a thin ribbon of epoxy falling into the far end, thinning out once the river is full
-        const streamOn = pour > 0 && pour < 0.92;
+
+        const cupIn = smoother(clamp01(pour / 0.1)), cupOut = smoother(clamp01((pour - 0.88) / 0.12));
+        const tip = smoother(clamp01((pour - 0.04) / 0.1)) * (1 - cupOut);
+        cupPivot.visible = pour > 0 && pour < 1;
+        if (cupPivot.visible) {
+          const lipY = LIP_Y + 0.5 * (1 - cupIn) + 0.5 * cupOut;
+          cupPivot.position.set(CUP_X - 0.25 * (1 - cupIn), lipY, riverMid(CUP_X));
+          // Tip steeper as the cup empties, the way you pour from a cup by hand
+          cupPivot.rotation.z = -tip * (1.75 + 0.35 * fill);
+          cupResin.scale.y = Math.max(0.05, 1 - 0.95 * fill);
+        }
+        // The stream runs from the cup's lip straight down to the epoxy surface, thinning to a trickle at the end
+        const streamOn = pour > 0.13 && pour < 0.9;
         pourStream.visible = streamOn;
         if (streamOn) {
-          pourStream.scale.set(1 - 0.6 * smoother(clamp01((pour - 0.6) / 0.32)), 1, 1);
-          pourStream.position.set(-HALF + 0.12, -T * (1 - level), riverMid(-HALF + 0.12));
+          const surface = -T * (1 - level);
+          const start = smoother(clamp01((pour - 0.13) / 0.03)); // the first drop takes a moment to reach the bottom
+          const length = (cupPivot.position.y - surface) * start;
+          pourStream.position.set(CUP_X, cupPivot.position.y - length, riverMid(CUP_X));
+          pourStream.scale.set(1 - 0.7 * smoother(clamp01((pour - 0.7) / 0.2)), Math.max(0.001, length / 0.7), 1);
         }
         resin.scale.y = level;
         resin.position.y = -T * (1 - level);
