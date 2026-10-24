@@ -188,7 +188,7 @@
     /* Scroll-driven build */
     .build {
       position: relative;
-      height: 440vh;
+      height: 640vh;
       background: var(--green-deep);
       color: #ece8de;
     }
@@ -397,7 +397,7 @@
         align-content: center;
         gap: 18px;
       }
-      .build { height: 380vh; }
+      .build { height: 560vh; }
       .build-art { order: -1; aspect-ratio: 4 / 3; max-height: 40vh; }
       .build-copy h2 { font-size: 24px; margin-bottom: 10px; }
       .steps li { padding-block: 3px; }
@@ -513,31 +513,43 @@
           <div class="steps-progress"></div>
           <ol class="steps">
             <li class="on">
-              <h3><button type="button" class="step-link"><span>01</span>Matched slabs</button></h3>
-              <p>Two slabs from the same log, live edges turned to face each other. The bark comes off by hand so the edge keeps its shape.</p>
+              <h3><button type="button" class="step-link"><span>01</span>Felled</button></h3>
+              <p>It starts with a single black walnut, often one a storm brought down or that had to come out anyway. The crown is cut away, leaving the trunk.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>02</span>Flattened</button></h3>
+              <h3><button type="button" class="step-link"><span>02</span>Milled</button></h3>
+              <p>At the sawmill the log is sliced lengthwise into thick slabs, bark still on. The slabs are kept in order so neighbors can be paired later.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>03</span>Dried</button></h3>
+              <p>The slabs are stacked with spacers so air moves between them, then left to dry, roughly a year per inch of thickness, before a last stint in the kiln.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>04</span>Matched slabs</button></h3>
+              <p>Two neighboring slabs from the stack, live edges turned to face each other. The bark comes off by hand so the edge keeps its shape.</p>
+            </li>
+            <li>
+              <h3><button type="button" class="step-link"><span>05</span>Flattened</button></h3>
               <p>A router rides a sled over each slab, taking off a little at a time until the faces are dead flat and the boards no longer rock.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>03</span>The mold</button></h3>
+              <h3><button type="button" class="step-link"><span>06</span>The mold</button></h3>
               <p>A melamine form goes up around the slabs, its seams taped and sealed so not a drop of epoxy can escape.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>04</span>The pour</button></h3>
+              <h3><button type="button" class="step-link"><span>07</span>The pour</button></h3>
               <p>Tinted epoxy runs down the gap between them, poured in layers so it cures clear and doesn't crack from its own heat.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>05</span>Torched and cured</button></h3>
+              <h3><button type="button" class="step-link"><span>08</span>Torched and cured</button></h3>
               <p>A quick pass with a torch draws trapped air to the surface and pops it. Then the table sits for three days to harden before the mold comes off.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>06</span>A butterfly key</button></h3>
+              <h3><button type="button" class="step-link"><span>09</span>A butterfly key</button></h3>
               <p>Where the wood has checked, a walnut bowtie is cut in across the crack so it can never open further.</p>
             </li>
             <li>
-              <h3><button type="button" class="step-link"><span>07</span>Sanded and oiled</button></h3>
+              <h3><button type="button" class="step-link"><span>10</span>Sanded and oiled</button></h3>
               <p>The whole top is sanded from 80 grit up to 400, then oil goes on by hand, darkening the grain and bringing up the shine.</p>
             </li>
           </ol>
@@ -765,8 +777,20 @@
       rake: [0.84, 0.95],     // light drops to a low raking angle
       wipe: [0.91, 0.99]      // oil goes on along the grain
     };
-    const STEP_START = [0, 0.13, 0.25, 0.33, 0.48, 0.64, 0.83];      // where each numbered step begins
-    const STEP_LAND = [0.12, 0.245, 0.325, 0.475, 0.635, 0.815, 1]; // where a step link scrolls to: that step, completed
+    // The first P0 of the scroll is the prologue (tree to dried slabs); the build timeline above plays in the rest
+    const P0 = 0.32;
+    const toBuild = v => P0 + (1 - P0) * v;
+    const PRO = {
+      fell: [0.05, 0.3],
+      buck: [0.32, 0.42],    // the crown is cut away
+      mill: [0.45, 0.68],    // sawmill blade travels the log
+      stack: [0.7, 0.8],     // slabs settle into a stickered stack
+      dry: [0.8, 0.9],
+      choose: [0.9, 1]       // the matched pair lifts out
+    };
+    // Where each numbered step begins, and where a step link scrolls to (that step, completed)
+    const STEP_START = [0, 0.43 * P0, 0.72 * P0, ...[0, 0.13, 0.25, 0.33, 0.48, 0.64, 0.83].map(toBuild)];
+    const STEP_LAND = [0.42 * P0, 0.7 * P0, 0.9 * P0, ...[0.12, 0.245, 0.325, 0.475, 0.635, 0.815, 1].map(toBuild)];
 
     // ---------- Table layout (metres; x along the table, z across it) ----------
     const L = 3.2, W = 1.5, T = 0.09, HALF = L / 2;
@@ -1173,7 +1197,28 @@
       mold: { min: [-HALF - 0.03, -T, -W / 2 - 0.03], max: [HALF + 0.03, 0.03, W / 2 + 0.03] },
       torch: { min: [-HALF, -T, -W / 2], max: [HALF, 0.16, W / 2] }
     };
-    const SHOTS = [
+    // Prologue framing: the standing tree, the felled trunk, the log, the sawmill, the drying stack
+    const R = 0.38, LOG = 3.4, AXIS_Y = -T + R;
+    Object.assign(BOXES, {
+      tree: { min: [-LOG / 2 - 1.7, -T, -1.7], max: [-LOG / 2 + 1.7, 7.7, 1.7] },
+      falling: { min: [-LOG / 2 - 1.7, -T, -1.9], max: [-LOG / 2 + 7.0, 7.4, 1.9] },
+      fallen: { min: [-LOG / 2 - 0.3, -T, -1.9], max: [-LOG / 2 + 8.0, 2.2, 1.9] },
+      log: { min: [-LOG / 2 - 0.1, -T, -0.5], max: [LOG / 2 + 0.1, AXIS_Y + R, 0.5] },
+      mill: { min: [-LOG / 2 - 0.4, -T, -0.85], max: [LOG / 2 + 0.4, 1.15, 0.85] },
+      stack: { min: [-LOG / 2, -T, -0.5], max: [LOG / 2, 0.45, 0.5] }
+    });
+    const PRO_SHOTS = [
+      { p: 0, az: -0.75, el: 0.14, box: 'tree', margin: 0.06, fov: 34 },
+      { p: 0.05, az: -0.72, el: 0.16, box: 'tree', margin: 0.06, fov: 34 },
+      { p: 0.17, az: -0.64, el: 0.24, box: 'falling', margin: 0.05, fov: 34 },
+      { p: 0.3, az: -0.55, el: 0.36, box: 'fallen', margin: 0.06, fov: 32 },
+      { p: 0.43, az: -0.5, el: 0.4, box: 'log', margin: 0.08, fov: 30 },
+      { p: 0.47, az: -0.45, el: 0.42, box: 'mill', margin: 0.06, fov: 30 },
+      { p: 0.68, az: -0.35, el: 0.45, box: 'mill', margin: 0.06, fov: 30 },
+      { p: 0.8, az: -0.4, el: 0.5, box: 'stack', margin: 0.08, fov: 30 },
+      { p: 0.9, az: -0.45, el: 0.6, box: 'stack', margin: 0.08, fov: 30 }
+    ].map(s => ({ ...s, p: s.p * P0 }));
+    const BUILD_SHOTS = [
       { p: 0, az: -0.5, el: 0.8, box: 'spread', margin: 0.08, fov: 30 },
       { p: 0.12, az: -0.42, el: 0.76, box: 'table', margin: 0.06, fov: 30 },
       { p: 0.24, az: -0.3, el: 0.62, box: 'sled', margin: 0.05, fov: 30 },
@@ -1187,6 +1232,7 @@
       // Product shot: low three-quarter from the key's corner, looking down the length, settling in while the oil goes on
       { p: 1, az: 1.3, el: 0.34, box: 'table', margin: 0.03, fov: 44 }
     ];
+    const SHOTS = [...PRO_SHOTS, ...BUILD_SHOTS.map(s => ({ ...s, p: toBuild(s.p) }))];
     function shotAt(p, spread) {
       let i = 0;
       while (i < SHOTS.length - 2 && p > SHOTS[i + 1].p) i++;
@@ -1476,7 +1522,197 @@
 
       const riverMid = x => (edgeL(x) + edgeR(x)) / 2;
 
-      apply = p => {
+      // ----- Prologue: standing walnut to stacked, dried slabs -----
+      const pro = new THREE.Group();
+      scene.add(pro);
+      const barkTex = assets ? sideMat.map.clone() : null;
+      if (barkTex) { barkTex.repeat.set(3, 5); barkTex.needsUpdate = true; }
+      const barkLook = extra => new THREE.MeshStandardMaterial(Object.assign({ color: assets ? 0x6b5444 : 0x3b2c22, map: barkTex, roughness: 1 }, extra));
+
+      // End grain: growth rings inside the cream sapwood and bark
+      const ringCanvas = document.createElement('canvas');
+      ringCanvas.width = ringCanvas.height = 256;
+      {
+        const c = ringCanvas.getContext('2d');
+        const disc = (r, color) => { c.fillStyle = color; c.beginPath(); c.arc(128, 128, r, 0, Math.PI * 2); c.fill(); };
+        disc(128, '#3a2a1f'); disc(119, '#caa87b'); disc(103, '#6e4a30');
+        for (let r = 5; r < 103; r += 2.6 + 1.4 * Math.abs(Math.sin(r * 0.7))) {
+          c.strokeStyle = 'rgba(38, 22, 12, ' + (0.22 + 0.2 * Math.abs(Math.sin(r))) + ')';
+          c.lineWidth = 1;
+          c.beginPath(); c.ellipse(128 + Math.sin(r * 0.3) * 2, 128, r, r * 0.97, 0, 0, Math.PI * 2); c.stroke();
+        }
+        disc(3, '#2b1b10');
+      }
+      const ringTex = new THREE.CanvasTexture(ringCanvas);
+      ringTex.colorSpace = THREE.SRGBColorSpace;
+
+      // The trunk's lower length becomes the log, so it is clipped away behind the sawmill blade
+      const logCut = new THREE.Plane(new THREE.Vector3(1, 0, 0), 10);
+      const logBark = barkLook({ clippingPlanes: [logCut], clipShadows: true });
+      const endGrain = new THREE.MeshStandardMaterial({ map: ringTex, roughness: 0.9, clippingPlanes: [logCut], clipShadows: true });
+
+      // Tree: pivots at its base so it can fall along +x
+      const tree = new THREE.Group();
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.96, R, LOG, 40), [logBark, endGrain, endGrain]);
+      log.position.y = LOG / 2;
+      const crownBark = barkLook({ transparent: true });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c4527, roughness: 0.95, transparent: true });
+      const crown = new THREE.Group();
+      const upperTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, R * 0.96, 3.2, 24), crownBark);
+      upperTrunk.position.y = LOG + 1.6;
+      crown.add(upperTrunk);
+      // Crown: many soft, lumpy clumps of foliage in a broad, open dome, as walnuts grow
+      const leafSeed = { s: 11 };
+      const lr = () => ((leafSeed.s = (leafSeed.s * 16807) % 2147483647) / 2147483647);
+      for (let n = 0; n < 26; n++) {
+        const a = lr() * Math.PI * 2, rad = 0.4 + lr() * 1.6, y = 5.2 + lr() * 2.3 - rad * 0.35;
+        const r = 0.45 + lr() * 0.55;
+        const g = new THREE.SphereGeometry(r, 28, 18), pos = g.attributes.position;
+        for (let v = 0; v < pos.count; v++) {
+          const k = 1 + 0.18 * (Math.sin(pos.getX(v) * 9 + n) * Math.sin(pos.getY(v) * 7) + Math.sin(pos.getZ(v) * 11 - n) * 0.5);
+          pos.setXYZ(v, pos.getX(v) * k, pos.getY(v) * k * 0.85, pos.getZ(v) * k);
+        }
+        g.computeVertexNormals();
+        const clump = new THREE.Mesh(g, leafMat);
+        clump.position.set(Math.cos(a) * rad, y, Math.sin(a) * rad);
+        crown.add(clump);
+      }
+      const branchGeo = new THREE.CylinderGeometry(0.035, 0.08, 1.7, 8);
+      for (const [a, y] of [[0.8, 4.7], [-1.1, 5.0], [2.4, 5.3], [-2.6, 4.9]]) {
+        const branch = new THREE.Mesh(branchGeo, crownBark);
+        branch.position.set(Math.cos(a) * 0.55, y + 0.5, Math.sin(a) * 0.55);
+        branch.rotation.set(Math.sin(a) * 0.75, 0, -Math.cos(a) * 0.75);
+        crown.add(branch);
+      }
+      tree.add(log, crown);
+      tree.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      pro.add(tree);
+
+      // Slabs inside the log, revealed as the blade passes. The two middle ones become the table.
+      const STACK_Y = n => -T + 0.07 + T / 2 + n * (T + 0.028);
+      let slabFace = null;
+      if (assets) {
+        slabFace = new THREE.DataTexture(assets.scan.wood.data, assets.scan.wood.w, assets.scan.wood.h, THREE.RGBAFormat);
+        slabFace.colorSpace = THREE.SRGBColorSpace;
+        slabFace.wrapS = slabFace.wrapT = THREE.RepeatWrapping;
+        slabFace.minFilter = THREE.LinearMipmapLinearFilter;
+        slabFace.generateMipmaps = true;
+        slabFace.anisotropy = aniso;
+        slabFace.repeat.set(LOG / 0.72, 0.62 / 0.4);
+        slabFace.needsUpdate = true;
+      }
+      const proSlabs = [-1.5, -0.5, 0.5, 1.5].map(k => {
+        const dy = k * T, w = 2 * Math.sqrt(R * R - Math.pow(Math.abs(dy) + T / 2, 2)) * 0.97;
+        // Same sanded, unfinished look as the table's slabs, so the hand-off between them is seamless
+        const face = new THREE.MeshPhysicalMaterial({
+          map: slabFace, color: assets ? 0xffffff : 0x6b4a33, roughness: 1, transparent: true,
+          sheen: 1, sheenColor: new THREE.Color(0x4e4239), sheenRoughness: 0.9
+        });
+        addFinish(face, { name: 'stack', dry: 0.12, roughDry: 1, roughWet: 0.14, roughDone: 0.62, coat: 0 });
+        const bark = barkLook({ transparent: true });
+        const end = new THREE.MeshStandardMaterial({ color: 0x6e4a30, roughness: 0.9, transparent: true });
+        const m = new THREE.Mesh(new THREE.BoxGeometry(LOG - 0.02, T - 0.004, w), [end, end, face, face, bark, bark]);
+        m.castShadow = m.receiveShadow = true;
+        m.userData = { dy, w, mats: [face, bark, end] };
+        pro.add(m);
+        return m;
+      });
+
+      // Drying stack: bunks under the slabs and stickers between them
+      const stickMat = new THREE.MeshStandardMaterial({ color: 0x2c2219, roughness: 0.9, transparent: true });
+      const stickers = new THREE.Group();
+      for (let n = 0; n <= 3; n++) {
+        for (const x of [-1.5, -0.75, 0, 0.75, 1.5]) {
+          const h = n === 0 ? 0.07 : 0.028;
+          const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.86), stickMat);
+          s.position.set(x, n === 0 ? -T + h / 2 : STACK_Y(n - 1) + T / 2 + h / 2, 0);
+          s.castShadow = true;
+          stickers.add(s);
+        }
+      }
+      pro.add(stickers);
+
+      // Sawmill: track along the log and a carriage carrying the band wheels and blade
+      const mill = new THREE.Group(), carriage = new THREE.Group();
+      for (const z of [-0.62, 0.62]) {
+        const track = new THREE.Mesh(new THREE.BoxGeometry(LOG + 1, 0.04, 0.06), alu);
+        track.position.set(0, -T + 0.02, z);
+        mill.add(track);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 0.08), black);
+        post.position.set(0, -T + 0.6, z);
+        const housing = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.46, 0.12), alu);
+        housing.position.set(0, AXIS_Y, z * 0.9);
+        carriage.add(post, housing);
+      }
+      const topBeam = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.36), black);
+      topBeam.position.y = -T + 1.2;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.016, 1.04), new THREE.MeshStandardMaterial({ color: 0xdfe3e6, metalness: 1, roughness: 0.22 }));
+      blade.position.y = AXIS_Y;
+      const engine = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.26), new THREE.MeshStandardMaterial({ color: 0x8c6a1e, roughness: 0.5 }));
+      engine.position.set(0, -T + 1.0, 0.85);
+      carriage.add(topBeam, blade, engine);
+      carriage.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      mill.add(carriage);
+      pro.add(mill);
+
+      let wideShadow = null;
+      const applyPrologue = P => {
+        const q = clamp01(P / P0), at = r => clamp01((q - r[0]) / (r[1] - r[0]));
+        pro.visible = P < P0;
+        if (!pro.visible) return;
+
+        // Felling: the tree tips slowly, then falls faster, and comes to rest on its side
+        const fall = at(PRO.fell), f = fall * fall;
+        tree.rotation.z = -Math.PI / 2 * f;
+        tree.position.set(-LOG / 2, mix(-T, AXIS_Y, f), 0);
+
+        // Bucking: the crown is cut free and hauled off along the trunk line
+        const buck = smoother(at(PRO.buck));
+        crown.visible = buck < 1;
+        crown.position.y = 2.6 * buck;
+        crownBark.opacity = leafMat.opacity = 1 - buck;
+
+        // Milling: the carriage runs the length of the log; behind the blade the slabs show
+        const ml = at(PRO.mill), bladeX = mix(-LOG / 2 - 0.35, LOG / 2 + 0.35, ml);
+        mill.visible = ml > 0 && q < PRO.stack[0] + 0.02;
+        carriage.position.x = bladeX;
+        logCut.constant = ml > 0 ? -bladeX : 10;
+        log.visible = ml < 1;
+
+        // Stacking, drying, then choosing the matched pair
+        const sep = smoother(at(PRO.stack)), dry = at(PRO.dry), pick = smoother(at(PRO.choose));
+        proSlabs.forEach((s, n) => {
+          let y = mix(AXIS_Y + s.userData.dy, STACK_Y(n), sep), z = 0, fade = 1;
+          if (n === 1 || n === 2) {
+            y = mix(y, -T / 2, pick) + 0.35 * Math.sin(Math.PI * pick);
+            z = mix(0, n === 1 ? -1.05 : 1.05, pick);
+            s.scale.z = mix(1, 0.6 / s.userData.w, pick);
+          } else fade = 1 - clamp01(pick * 3);
+          s.position.set(0, y, z);
+          s.visible = ml > 0 && fade > 0.01;
+          s.castShadow = fade > 0.6;
+          // Fresh-sawn walnut is paler and greyer; it deepens as it dries
+          s.userData.mats[0].color.setScalar(mix(1.1, 0.92, dry));
+          for (const m of s.userData.mats) m.opacity = fade;
+        });
+        stickMat.opacity = sep * (1 - clamp01(pick * 3));
+        stickers.visible = stickMat.opacity > 0.01;
+        for (const c of stickers.children) c.castShadow = stickMat.opacity > 0.6;
+
+        // The tall tree needs a wider, more distant shadow camera than the table
+        const wide = q < 0.45;
+        if (wide) sun.position.multiplyScalar(3);
+        if (wide !== wideShadow) {
+          wideShadow = wide;
+          const e = wide ? 7 : 2.6;
+          Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, far: wide ? 40 : 14 });
+          sun.shadow.camera.updateProjectionMatrix();
+        }
+      };
+
+      apply = P => {
+        const p = clamp01((P - P0) / (1 - P0));
+        slabL.visible = slabR.visible = P >= P0;
         const spread = 0.6 * (1 - easeOut(seg(p, STAGE.slabs)));
         slabL.position.z = -spread;
         slabR.position.z = spread;
@@ -1563,7 +1799,8 @@
         scene.environmentIntensity = baseEnv * mix(1, 0.7, rake);
         scene.environmentRotation.y = mix(-0.6, 0.9, p);
 
-        const shot = shotAt(p, spread);
+        applyPrologue(P);
+        const shot = shotAt(P, spread);
         camera.fov = shot.fov;
         frameBox(camera, shot);
         renderer.render(scene, camera);
